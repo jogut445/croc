@@ -8,7 +8,8 @@
  * Arithmetic logic unit
  */
 module cve2_alu #(
-  parameter cve2_pkg::rv32b_e RV32B = cve2_pkg::RV32BNone
+  parameter cve2_pkg::rv32b_e    RV32B    = cve2_pkg::RV32BNone,
+  parameter cve2_pkg::rv32simd_e RV32SIMD = cve2_pkg::RV32SIMDNone
 ) (
   input  cve2_pkg::alu_op_e operator_i,
   input  logic [31:0]       operand_a_i,
@@ -409,6 +410,7 @@ module cve2_alu #(
   logic [31:0] invbutterfly_result;
   logic [31:0] clmul_result;
   logic [31:0] multicycle_result;
+  logic [31:0] simd_result;
 
   if (RV32B != RV32BNone) begin : g_alu_rvb
 
@@ -1313,6 +1315,63 @@ module cve2_alu #(
     assign imd_val_we_o        = '{default: '0};
   end
 
+  /////////////////////
+  // SIMD32-IBEX ALU //
+  /////////////////////
+
+  if (RV32SIMD != RV32SIMDNone) begin : g_alu_simd
+
+    // --- 8-bit lanes (4 lanes) ---
+    logic [31:0] padd8_r, psub8_r, pmul8_r, padd_sat8_r;
+    logic [8:0]  sat8_sum [4];
+
+    for (genvar i = 0; i < 4; i++) begin : gen_simd8
+      assign padd8_r[8*i+:8]     = operand_a_i[8*i+:8] + operand_b_i[8*i+:8];
+      assign psub8_r[8*i+:8]     = operand_a_i[8*i+:8] - operand_b_i[8*i+:8];
+      assign pmul8_r[8*i+:8]     = operand_a_i[8*i+:8] * operand_b_i[8*i+:8];
+      assign sat8_sum[i]          = {1'b0, operand_a_i[8*i+:8]} + {1'b0, operand_b_i[8*i+:8]};
+      assign padd_sat8_r[8*i+:8] = sat8_sum[i][8] ? 8'hFF : sat8_sum[i][7:0];
+    end
+
+    // --- 16-bit lanes (2 lanes) ---
+    logic [31:0] padd16_r, psub16_r, pmul16_r, padd_sat16_r;
+    logic [16:0] sat16_sum [2];
+
+    for (genvar j = 0; j < 2; j++) begin : gen_simd16
+      assign padd16_r[16*j+:16]     = operand_a_i[16*j+:16] + operand_b_i[16*j+:16];
+      assign psub16_r[16*j+:16]     = operand_a_i[16*j+:16] - operand_b_i[16*j+:16];
+      assign pmul16_r[16*j+:16]     = operand_a_i[16*j+:16] * operand_b_i[16*j+:16];
+      assign sat16_sum[j]            = {1'b0, operand_a_i[16*j+:16]} + {1'b0, operand_b_i[16*j+:16]};
+      assign padd_sat16_r[16*j+:16] = sat16_sum[j][16] ? 16'hFFFF : sat16_sum[j][15:0];
+    end
+
+    // --- 32-bit scalar ---
+    logic [32:0] sat32_sum;
+    logic [31:0] pmul32_r, padd_sat32_r;
+    assign pmul32_r     = operand_a_i * operand_b_i;
+    assign sat32_sum    = {1'b0, operand_a_i} + {1'b0, operand_b_i};
+    assign padd_sat32_r = sat32_sum[32] ? 32'hFFFF_FFFF : sat32_sum[31:0];
+
+    always_comb begin
+      unique case (operator_i)
+        ALU_PADD8:      simd_result = padd8_r;
+        ALU_PSUB8:      simd_result = psub8_r;
+        ALU_PMUL8:      simd_result = pmul8_r;
+        ALU_PADD_SAT8:  simd_result = padd_sat8_r;
+        ALU_PADD16:     simd_result = padd16_r;
+        ALU_PSUB16:     simd_result = psub16_r;
+        ALU_PMUL16:     simd_result = pmul16_r;
+        ALU_PADD_SAT16: simd_result = padd_sat16_r;
+        ALU_PMUL32:     simd_result = pmul32_r;
+        ALU_PADD_SAT32: simd_result = padd_sat32_r;
+        default:        simd_result = '0;
+      endcase
+    end
+
+  end else begin : g_no_simd
+    assign simd_result = '0;
+  end
+
   ////////////////
   // Result mux //
   ////////////////
@@ -1390,6 +1449,13 @@ module cve2_alu #(
       // Carry-less Multiply Operations (RV32B)
       ALU_CLMUL, ALU_CLMULR,
       ALU_CLMULH: result_o = clmul_result;
+
+      // SIMD32-IBEX packed SIMD operations
+      ALU_PADD8,      ALU_PSUB8,
+      ALU_PMUL8,      ALU_PADD_SAT8,
+      ALU_PADD16,     ALU_PSUB16,
+      ALU_PMUL16,     ALU_PADD_SAT16,
+      ALU_PMUL32,     ALU_PADD_SAT32: result_o = simd_result;
 
       default: ;
     endcase

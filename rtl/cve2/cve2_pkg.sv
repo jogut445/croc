@@ -46,12 +46,18 @@ package cve2_pkg;
     RV32BFull       = 3
   } rv32b_e;
 
+  typedef enum integer {
+    RV32SIMDNone = 0,
+    RV32SIMDFull = 1
+  } rv32simd_e;
+
   /////////////
   // Opcodes //
   /////////////
 
   typedef enum logic [6:0] {
     OPCODE_LOAD     = 7'h03,
+    OPCODE_CUSTOM0  = 7'h0b,  // custom-0: SIMD32-IBEX extension
     OPCODE_MISC_MEM = 7'h0f,
     OPCODE_OP_IMM   = 7'h13,
     OPCODE_AUIPC    = 7'h17,
@@ -175,7 +181,22 @@ package cve2_pkg;
     ALU_CRC32_H,
     ALU_CRC32C_H,
     ALU_CRC32_W,
-    ALU_CRC32C_W
+    ALU_CRC32C_W,
+
+    // SIMD32-IBEX packed SIMD (custom-0 opcode)
+    // 8-bit lanes (SEW=8, 4 lanes)
+    ALU_PADD8,
+    ALU_PSUB8,
+    ALU_PMUL8,
+    ALU_PADD_SAT8,
+    // 16-bit lanes (SEW=16, 2 lanes)
+    ALU_PADD16,
+    ALU_PSUB16,
+    ALU_PMUL16,
+    ALU_PADD_SAT16,
+    // 32-bit scalar (SEW=32)
+    ALU_PMUL32,
+    ALU_PADD_SAT32
   } alu_op_e;
 
   typedef enum logic [1:0] {

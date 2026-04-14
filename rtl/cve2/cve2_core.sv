@@ -22,6 +22,7 @@ module cve2_core import cve2_pkg::*; #(
   parameter bit          RV32E             = 1'b0,
   parameter rv32m_e      RV32M             = RV32MFast,
   parameter rv32b_e      RV32B             = RV32BNone,
+  parameter rv32simd_e   RV32SIMD          = RV32SIMDNone,
   parameter bit          DbgTriggerEn      = 1'b0,
   parameter int unsigned DbgHwBreakNum     = 1,
   parameter bit          XInterface        = 1'b0
@@ -374,10 +375,11 @@ module cve2_core import cve2_pkg::*; #(
   //////////////
 
   cve2_id_stage #(
-    .RV32E          (RV32E),
-    .RV32M          (RV32M),
-    .RV32B          (RV32B),
-    .XInterface     (XInterface)
+    .RV32E      (RV32E),
+    .RV32M      (RV32M),
+    .RV32B      (RV32B),
+    .RV32SIMD   (RV32SIMD),
+    .XInterface (XInterface)
   ) id_stage_i (
     .clk_i (clk_i),
     .rst_ni(rst_ni),
@@ -529,8 +531,9 @@ module cve2_core import cve2_pkg::*; #(
   assign unused_illegal_insn_id = illegal_insn_id;
 
   cve2_ex_block #(
-    .RV32M          (RV32M),
-    .RV32B          (RV32B)
+    .RV32M    (RV32M),
+    .RV32B    (RV32B),
+    .RV32SIMD (RV32SIMD)
   ) ex_block_i (
     .clk_i (clk_i),
     .rst_ni(rst_ni),

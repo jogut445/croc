@@ -18,23 +18,29 @@ CROC_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$CROC_ROOT"
 
 echo "============================================="
-echo "Phase 1: default config — helloworld"
+echo "Phase 1: default config — helloworld + SIMD"
 echo "============================================="
 
-# ensure default config (iDMA off)
+# ensure default config (iDMA off, SIMD on by default)
 "$SCRIPT_DIR/set_croc_config.sh"
 
-# build software
+# build software (includes test_simd.c automatically via wildcard in sw/Makefile)
 make -C sw
 
-# build verilator simulation and run helloworld
+# build verilator simulation with SIMD enabled (CoreRV32SIMDEnable=1 by default)
 cd verilator
-./run_verilator.sh --build 
+./run_verilator.sh --build
 ./run_verilator.sh --run ../sw/bin/helloworld.hex
 grep -q "\[UART\] Hello World from Croc!" croc.log || exit 1
 
 ./run_verilator.sh --run ../sw/bin/test/print_config.hex
 "$SCRIPT_DIR/check_sim.sh" croc.log
+
+# run SIMD unit test with default config (SIMD on, iDMA off)
+./run_verilator.sh --run ../sw/bin/test/test_simd.hex
+grep -q "\[JTAG\] Simulation finished: SUCCESS" croc.log || \
+    { echo "SIMD unit test FAILED"; exit 1; }
+echo "SIMD unit test passed."
 
 cd "$CROC_ROOT"
 

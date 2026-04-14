@@ -116,6 +116,7 @@ module core_wrap import croc_pkg::*; #() (
     .RV32E            ( 0                   ),
     .RV32M            ( cve2_pkg::RV32MNone ),
     .RV32B            ( cve2_pkg::RV32BNone ),
+    .RV32SIMD         ( CoreRV32SIMDEnable ? cve2_pkg::RV32SIMDFull : cve2_pkg::RV32SIMDNone ),
     .DbgTriggerEn     ( 1'b1                ),
     .DbgHwBreakNum    ( 1                   ),
     .XInterface       ( 1'b0                )

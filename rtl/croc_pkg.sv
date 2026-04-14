@@ -37,10 +37,12 @@ package croc_pkg;
   // Core Configuration   //
   //////////////////////////
   /// Physical Memory Protection enable
-  localparam bit          CorePMPEnable = 1'b0;
+  localparam bit          CorePMPEnable      = 1'b0;
+  /// Enable packed SIMD32-IBEX extension (custom-0 opcode, RV32SIMD)
+  localparam bit          CoreRV32SIMDEnable = 1'b1;
   /// Core type identifier reported in the SoC info register:
   /// 3'b000=CVE2, 3'b001=Ibex, 3'b111=custom, others are reserved
-  localparam int unsigned CoreId        = 0;
+  localparam int unsigned CoreId             = 0;
 
 
   ////////////////////////
