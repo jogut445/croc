@@ -189,11 +189,13 @@ package cve2_pkg;
     ALU_PSUB8,
     ALU_PMUL8,
     ALU_PADD_SAT8,
+    ALU_PADD8_ACC,   // horizontal: rd = sum of all 4 byte lanes of rs1
     // 16-bit lanes (SEW=16, 2 lanes)
     ALU_PADD16,
     ALU_PSUB16,
     ALU_PMUL16,
     ALU_PADD_SAT16,
+    ALU_PADD16_ACC,  // horizontal: rd = sum of both halfword lanes of rs1
     // 32-bit scalar (SEW=32)
     ALU_PMUL32,
     ALU_PADD_SAT32

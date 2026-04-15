@@ -1352,19 +1352,27 @@ module cve2_alu #(
     assign sat32_sum    = {1'b0, operand_a_i} + {1'b0, operand_b_i};
     assign padd_sat32_r = sat32_sum[32] ? 32'hFFFF_FFFF : sat32_sum[31:0];
 
+    // --- Horizontal accumulate (rs2 unused, operates only on operand_a) ---
+    logic [31:0] padd8_acc_r, padd16_acc_r;
+    assign padd8_acc_r  = {24'b0, operand_a_i[ 7: 0]} + {24'b0, operand_a_i[15: 8]}
+                        + {24'b0, operand_a_i[23:16]} + {24'b0, operand_a_i[31:24]};
+    assign padd16_acc_r = {16'b0, operand_a_i[15: 0]} + {16'b0, operand_a_i[31:16]};
+
     always_comb begin
       unique case (operator_i)
-        ALU_PADD8:      simd_result = padd8_r;
-        ALU_PSUB8:      simd_result = psub8_r;
-        ALU_PMUL8:      simd_result = pmul8_r;
-        ALU_PADD_SAT8:  simd_result = padd_sat8_r;
-        ALU_PADD16:     simd_result = padd16_r;
-        ALU_PSUB16:     simd_result = psub16_r;
-        ALU_PMUL16:     simd_result = pmul16_r;
-        ALU_PADD_SAT16: simd_result = padd_sat16_r;
-        ALU_PMUL32:     simd_result = pmul32_r;
-        ALU_PADD_SAT32: simd_result = padd_sat32_r;
-        default:        simd_result = '0;
+        ALU_PADD8:       simd_result = padd8_r;
+        ALU_PSUB8:       simd_result = psub8_r;
+        ALU_PMUL8:       simd_result = pmul8_r;
+        ALU_PADD_SAT8:   simd_result = padd_sat8_r;
+        ALU_PADD8_ACC:   simd_result = padd8_acc_r;
+        ALU_PADD16:      simd_result = padd16_r;
+        ALU_PSUB16:      simd_result = psub16_r;
+        ALU_PMUL16:      simd_result = pmul16_r;
+        ALU_PADD_SAT16:  simd_result = padd_sat16_r;
+        ALU_PADD16_ACC:  simd_result = padd16_acc_r;
+        ALU_PMUL32:      simd_result = pmul32_r;
+        ALU_PADD_SAT32:  simd_result = padd_sat32_r;
+        default:         simd_result = '0;
       endcase
     end
 
@@ -1452,9 +1460,9 @@ module cve2_alu #(
 
       // SIMD32-IBEX packed SIMD operations
       ALU_PADD8,      ALU_PSUB8,
-      ALU_PMUL8,      ALU_PADD_SAT8,
+      ALU_PMUL8,      ALU_PADD_SAT8,   ALU_PADD8_ACC,
       ALU_PADD16,     ALU_PSUB16,
-      ALU_PMUL16,     ALU_PADD_SAT16,
+      ALU_PMUL16,     ALU_PADD_SAT16,  ALU_PADD16_ACC,
       ALU_PMUL32,     ALU_PADD_SAT32: result_o = simd_result;
 
       default: ;

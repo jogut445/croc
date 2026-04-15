@@ -10,9 +10,10 @@
 //   funct3 = 2  → 32-bit scalar
 //
 //   funct7 encoding:
-//     0x00 = padd       0x01 = psub       0x08 = pand
-//     0x09 = por        0x0a = pxor       0x10 = pmul
-//     0x20 = padd_sat (unsigned saturation)
+//     0x00 = padd       0x01 = psub
+//     0x08 = padd.acc   (horizontal sum, rs2 unused)
+//     0x10 = pmul
+//     0x20 = padd_sat   (unsigned saturation)
 //
 // Instructions are emitted via the GAS .insn r directive:
 //   .insn r OPCODE, FUNC3, FUNC7, rd, rs1, rs2
@@ -26,17 +27,18 @@
 // 8-bit lane operations (funct3 = 0)
 static inline uint32_t simd_padd8    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 0,  0, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
 static inline uint32_t simd_psub8    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 0,  1, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
-static inline uint32_t simd_pand8    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 0,  8, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
-static inline uint32_t simd_por8     (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 0,  9, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
-static inline uint32_t simd_pxor8    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 0, 10, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
 static inline uint32_t simd_pmul8    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 0, 16, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
 static inline uint32_t simd_padd_sat8(uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 0, 32, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
+// Horizontal accumulate: rd = rs1[7:0]+rs1[15:8]+rs1[23:16]+rs1[31:24]  (rs2 unused)
+static inline uint32_t simd_padd8_acc(uint32_t a) { uint32_t r; asm volatile(".insn r 0x0b, 0, 8, %0, %1, zero" : "=r"(r) : "r"(a)); return r; }
 
 // 16-bit lane operations (funct3 = 1)
 static inline uint32_t simd_padd16    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 1,  0, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
 static inline uint32_t simd_psub16    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 1,  1, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
 static inline uint32_t simd_pmul16    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 1, 16, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
 static inline uint32_t simd_padd_sat16(uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 1, 32, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
+// Horizontal accumulate: rd = rs1[15:0]+rs1[31:16]  (rs2 unused)
+static inline uint32_t simd_padd16_acc(uint32_t a) { uint32_t r; asm volatile(".insn r 0x0b, 1, 8, %0, %1, zero" : "=r"(r) : "r"(a)); return r; }
 
 // 32-bit scalar operations (funct3 = 2)
 static inline uint32_t simd_padd32    (uint32_t a, uint32_t b) { uint32_t r; asm volatile(".insn r 0x0b, 2,  0, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b)); return r; }
@@ -77,63 +79,71 @@ int main(void) {
     // psub8 wrap: 0x01 - 0x02 = 0xFF (unsigned wrap)
     CHECK_ASSERT(4, simd_psub8(PACK8(1,0,0,0), PACK8(2,0,0,0)) == PACK8(0xFF,0,0,0));
 
-    // pand8: bitwise AND, lane width is irrelevant
-    CHECK_ASSERT(5, simd_pand8(0xF0F0F0F0u, 0x0F0F0F0Fu) == 0x00000000u);
-    CHECK_ASSERT(6, simd_pand8(0xFFFFFFFFu, 0xA5A5A5A5u) == 0xA5A5A5A5u);
-
-    // por8: bitwise OR
-    CHECK_ASSERT(7, simd_por8(0xF0F0F0F0u, 0x0F0F0F0Fu) == 0xFFFFFFFFu);
-    CHECK_ASSERT(8, simd_por8(0x00000000u, 0xA5A5A5A5u) == 0xA5A5A5A5u);
-
-    // pxor8: bitwise XOR
-    CHECK_ASSERT(9,  simd_pxor8(0xFF00FF00u, 0x00FF00FFu) == 0xFFFFFFFFu);
-    CHECK_ASSERT(10, simd_pxor8(0xA5A5A5A5u, 0xA5A5A5A5u) == 0x00000000u);
-
     // pmul8: lower 8 bits of lane product
     // [2*3, 3*4, 4*5, 5*6] = [6, 12, 20, 30]
-    CHECK_ASSERT(11, simd_pmul8(PACK8(2,3,4,5), PACK8(3,4,5,6)) == PACK8(6,12,20,30));
+    CHECK_ASSERT(5, simd_pmul8(PACK8(2,3,4,5), PACK8(3,4,5,6)) == PACK8(6,12,20,30));
 
     // pmul8 truncation: 16 * 16 = 256, lower byte = 0
-    CHECK_ASSERT(12, simd_pmul8(PACK8(16,1,1,1), PACK8(16,1,1,1)) == PACK8(0,1,1,1));
+    CHECK_ASSERT(6, simd_pmul8(PACK8(16,1,1,1), PACK8(16,1,1,1)) == PACK8(0,1,1,1));
 
     // padd_sat8: unsigned saturation at 0xFF
     // [255+1, 128+128, 16+240, 1+1] = [sat→255, sat→255, sat→255, 2]
-    CHECK_ASSERT(13, simd_padd_sat8(PACK8(255,128, 16,1),
-                                    PACK8(  1,128,240,1)) == PACK8(255,255,255,2));
+    CHECK_ASSERT(7, simd_padd_sat8(PACK8(255,128, 16,1),
+                                   PACK8(  1,128,240,1)) == PACK8(255,255,255,2));
 
-    // padd_sat8: no saturation case
-    CHECK_ASSERT(14, simd_padd_sat8(PACK8(10,20,30,40), PACK8(1,2,3,4)) == PACK8(11,22,33,44));
+    // padd_sat8: no saturation
+    CHECK_ASSERT(8, simd_padd_sat8(PACK8(10,20,30,40), PACK8(1,2,3,4)) == PACK8(11,22,33,44));
+
+    // padd8.acc: rd = sum of all four byte lanes (zero-extended to 32 bits)
+    // 1 + 2 + 3 + 4 = 10
+    CHECK_ASSERT(9, simd_padd8_acc(PACK8(1,2,3,4)) == 10u);
+
+    // padd8.acc: 0x10 + 0x20 + 0x30 + 0x40 = 0xA0
+    CHECK_ASSERT(10, simd_padd8_acc(PACK8(0x10,0x20,0x30,0x40)) == 0xA0u);
+
+    // padd8.acc: all 0xFF lanes → 4*255 = 1020 = 0x3FC (result exceeds 8 bits)
+    CHECK_ASSERT(11, simd_padd8_acc(PACK8(0xFF,0xFF,0xFF,0xFF)) == 0x3FCu);
 
     // =========================================================
     // 16-bit lane tests
     // =========================================================
 
     // padd16: [1+3, 2+4] = [4, 6]
-    CHECK_ASSERT(15, simd_padd16(PACK16(1,2), PACK16(3,4)) == PACK16(4,6));
+    CHECK_ASSERT(12, simd_padd16(PACK16(1,2), PACK16(3,4)) == PACK16(4,6));
 
     // padd16 wrap: 0xFFFF + 1 = 0x0000
-    CHECK_ASSERT(16, simd_padd16(PACK16(0xFFFF,0), PACK16(1,0)) == PACK16(0,0));
+    CHECK_ASSERT(13, simd_padd16(PACK16(0xFFFF,0), PACK16(1,0)) == PACK16(0,0));
 
     // psub16: [10-5, 11-3] = [5, 8]
-    CHECK_ASSERT(17, simd_psub16(PACK16(10,11), PACK16(5,3)) == PACK16(5,8));
+    CHECK_ASSERT(14, simd_psub16(PACK16(10,11), PACK16(5,3)) == PACK16(5,8));
 
     // psub16 wrap: 0x0001 - 0x0002 = 0xFFFF
-    CHECK_ASSERT(18, simd_psub16(PACK16(1,0), PACK16(2,0)) == PACK16(0xFFFF,0));
+    CHECK_ASSERT(15, simd_psub16(PACK16(1,0), PACK16(2,0)) == PACK16(0xFFFF,0));
 
     // pmul16: lower 16 bits of lane product
     // [2*4, 3*5] = [8, 15]
-    CHECK_ASSERT(19, simd_pmul16(PACK16(2,3), PACK16(4,5)) == PACK16(8,15));
+    CHECK_ASSERT(16, simd_pmul16(PACK16(2,3), PACK16(4,5)) == PACK16(8,15));
 
     // pmul16 truncation: 0x0100 * 0x0100 = 0x10000, lower 16 = 0
-    CHECK_ASSERT(20, simd_pmul16(PACK16(0x0100,1), PACK16(0x0100,1)) == PACK16(0,1));
+    CHECK_ASSERT(17, simd_pmul16(PACK16(0x0100,1), PACK16(0x0100,1)) == PACK16(0,1));
 
     // padd_sat16: unsigned saturation at 0xFFFF
     // [0xFFFF+1, 0x0100+0xFF00] = [sat→0xFFFF, sat→0xFFFF (0x10000)]
-    CHECK_ASSERT(21, simd_padd_sat16(PACK16(0xFFFF, 0x0100),
+    CHECK_ASSERT(18, simd_padd_sat16(PACK16(0xFFFF, 0x0100),
                                      PACK16(     1, 0xFF00)) == PACK16(0xFFFF, 0xFFFF));
 
     // padd_sat16: no saturation
-    CHECK_ASSERT(22, simd_padd_sat16(PACK16(100,200), PACK16(50,75)) == PACK16(150,275));
+    CHECK_ASSERT(19, simd_padd_sat16(PACK16(100,200), PACK16(50,75)) == PACK16(150,275));
+
+    // padd16.acc: rd = sum of both halfword lanes (zero-extended to 32 bits)
+    // 1 + 2 = 3
+    CHECK_ASSERT(20, simd_padd16_acc(PACK16(1,2)) == 3u);
+
+    // padd16.acc: 0xFFFF + 0x0001 = 0x10000 (result exceeds 16 bits)
+    CHECK_ASSERT(21, simd_padd16_acc(PACK16(0xFFFF, 0x0001)) == 0x10000u);
+
+    // padd16.acc: 0x1234 + 0x5678 = 0x68AC
+    CHECK_ASSERT(22, simd_padd16_acc(PACK16(0x1234, 0x5678)) == 0x68ACu);
 
     // =========================================================
     // 32-bit scalar tests

@@ -572,10 +572,8 @@ module cve2_decoder #(
           {7'b000_0000, 3'b000}, {7'b000_0000, 3'b001}, {7'b000_0000, 3'b010},
           // psub: 8-bit / 16-bit / 32-bit
           {7'b000_0001, 3'b000}, {7'b000_0001, 3'b001}, {7'b000_0001, 3'b010},
-          // pand / por / pxor (bitwise, all widths)
-          {7'b000_1000, 3'b000}, {7'b000_1000, 3'b001}, {7'b000_1000, 3'b010},
-          {7'b000_1001, 3'b000}, {7'b000_1001, 3'b001}, {7'b000_1001, 3'b010},
-          {7'b000_1010, 3'b000}, {7'b000_1010, 3'b001}, {7'b000_1010, 3'b010},
+          // padd.acc: horizontal 8-bit / 16-bit (rs2 unused)
+          {7'b000_1000, 3'b000}, {7'b000_1000, 3'b001},
           // pmul: 8-bit / 16-bit / 32-bit
           {7'b001_0000, 3'b000}, {7'b001_0000, 3'b001}, {7'b001_0000, 3'b010},
           // padd_sat: 8-bit / 16-bit / 32-bit
@@ -1181,10 +1179,9 @@ module cve2_decoder #(
             {7'b000_0001, 3'b000}: alu_operator_o = ALU_PSUB8;
             {7'b000_0001, 3'b001}: alu_operator_o = ALU_PSUB16;
             {7'b000_0001, 3'b010}: alu_operator_o = ALU_SUB;
-            // pand / por / pxor: bitwise, lane width irrelevant
-            {7'b000_1000, 3'b000}, {7'b000_1000, 3'b001}, {7'b000_1000, 3'b010}: alu_operator_o = ALU_AND;
-            {7'b000_1001, 3'b000}, {7'b000_1001, 3'b001}, {7'b000_1001, 3'b010}: alu_operator_o = ALU_OR;
-            {7'b000_1010, 3'b000}, {7'b000_1010, 3'b001}, {7'b000_1010, 3'b010}: alu_operator_o = ALU_XOR;
+            // padd.acc: horizontal sum (rs2 unused)
+            {7'b000_1000, 3'b000}: alu_operator_o = ALU_PADD8_ACC;
+            {7'b000_1000, 3'b001}: alu_operator_o = ALU_PADD16_ACC;
             // pmul: 8-bit / 16-bit / 32-bit
             {7'b001_0000, 3'b000}: alu_operator_o = ALU_PMUL8;
             {7'b001_0000, 3'b001}: alu_operator_o = ALU_PMUL16;
