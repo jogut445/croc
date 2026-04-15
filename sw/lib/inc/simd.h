@@ -1,4 +1,12 @@
+#pragma once
+
+#include <stdint.h>
+#include "config.h"
 #include "util.h"
+
+// ---------------------------------------------------------------------------
+// Inline-asm wrappers
+// ---------------------------------------------------------------------------
 
 // 8-bit lane operations (funct3 = 0)
 inline uint32_t simd_padd8    (uint32_t a, uint32_t b);
