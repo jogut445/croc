@@ -567,41 +567,22 @@ module cve2_decoder #(
         rf_ren_a_o = 1'b1;
         rf_ren_b_o = 1'b1;
         rf_we      = 1'b1;
-        if (RV32SIMD == RV32SIMDNone) begin
-          illegal_insn = 1'b1;
-        end else begin
-          unique case ({instr[31:25], instr[14:12]})
-            // padd
-            {7'b000_0000, 3'b000},
-            {7'b000_0000, 3'b001},
-            {7'b000_0000, 3'b010},
-            // psub
-            {7'b000_0001, 3'b000},
-            {7'b000_0001, 3'b001},
-            {7'b000_0001, 3'b010},
-            // pand
-            {7'b000_1000, 3'b000},
-            {7'b000_1000, 3'b001},
-            {7'b000_1000, 3'b010},
-            // por
-            {7'b000_1001, 3'b000},
-            {7'b000_1001, 3'b001},
-            {7'b000_1001, 3'b010},
-            // pxor
-            {7'b000_1010, 3'b000},
-            {7'b000_1010, 3'b001},
-            {7'b000_1010, 3'b010},
-            // pmul
-            {7'b001_0000, 3'b000},
-            {7'b001_0000, 3'b001},
-            {7'b001_0000, 3'b010},
-            // padd_sat
-            {7'b010_0000, 3'b000},
-            {7'b010_0000, 3'b001},
-            {7'b010_0000, 3'b010}: illegal_insn = 1'b0;
-            default:               illegal_insn = 1'b1;
-          endcase
-        end
+        unique case ({instr[31:25], instr[14:12]})
+          // padd: 8-bit / 16-bit / 32-bit
+          {7'b000_0000, 3'b000}, {7'b000_0000, 3'b001}, {7'b000_0000, 3'b010},
+          // psub: 8-bit / 16-bit / 32-bit
+          {7'b000_0001, 3'b000}, {7'b000_0001, 3'b001}, {7'b000_0001, 3'b010},
+          // pand / por / pxor (bitwise, all widths)
+          {7'b000_1000, 3'b000}, {7'b000_1000, 3'b001}, {7'b000_1000, 3'b010},
+          {7'b000_1001, 3'b000}, {7'b000_1001, 3'b001}, {7'b000_1001, 3'b010},
+          {7'b000_1010, 3'b000}, {7'b000_1010, 3'b001}, {7'b000_1010, 3'b010},
+          // pmul: 8-bit / 16-bit / 32-bit
+          {7'b001_0000, 3'b000}, {7'b001_0000, 3'b001}, {7'b001_0000, 3'b010},
+          // padd_sat: 8-bit / 16-bit / 32-bit
+          {7'b010_0000, 3'b000}, {7'b010_0000, 3'b001}, {7'b010_0000, 3'b010}:
+            illegal_insn = (RV32SIMD == RV32SIMDNone) ? 1'b1 : 1'b0;
+          default: illegal_insn = 1'b1;
+        endcase
       end
 
       /////////////
@@ -1190,37 +1171,31 @@ module cve2_decoder #(
       OPCODE_CUSTOM0: begin  // SIMD32-IBEX: R-type, rs1 op rs2 -> rd
         alu_op_a_mux_sel_o = OP_A_REG_A;
         alu_op_b_mux_sel_o = OP_B_REG_B;
-        unique case ({instr_alu[31:25], instr_alu[14:12]})
-          // padd: 8-bit / 16-bit / 32-bit(=ADD)
-          {7'b000_0000, 3'b000}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PADD8;
-          {7'b000_0000, 3'b001}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PADD16;
-          {7'b000_0000, 3'b010}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_ADD;
-          // psub: 8-bit / 16-bit / 32-bit(=SUB)
-          {7'b000_0001, 3'b000}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PSUB8;
-          {7'b000_0001, 3'b001}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PSUB16;
-          {7'b000_0001, 3'b010}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_SUB;
-          // pand: bitwise AND, lane width irrelevant
-          {7'b000_1000, 3'b000},
-          {7'b000_1000, 3'b001},
-          {7'b000_1000, 3'b010}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_AND;
-          // por: bitwise OR, lane width irrelevant
-          {7'b000_1001, 3'b000},
-          {7'b000_1001, 3'b001},
-          {7'b000_1001, 3'b010}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_OR;
-          // pxor: bitwise XOR, lane width irrelevant
-          {7'b000_1010, 3'b000},
-          {7'b000_1010, 3'b001},
-          {7'b000_1010, 3'b010}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_XOR;
-          // pmul
-          {7'b001_0000, 3'b000}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PMUL8;
-          {7'b001_0000, 3'b001}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PMUL16;
-          {7'b001_0000, 3'b010}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PMUL32;
-          // padd_sat
-          {7'b010_0000, 3'b000}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PADD_SAT8;
-          {7'b010_0000, 3'b001}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PADD_SAT16;
-          {7'b010_0000, 3'b010}: if (RV32SIMD != RV32SIMDNone) alu_operator_o = ALU_PADD_SAT32;
-          default: ;
-        endcase
+        if (RV32SIMD != RV32SIMDNone) begin
+          unique case ({instr_alu[31:25], instr_alu[14:12]})
+            // padd: 8-bit / 16-bit / 32-bit (scalar = ADD)
+            {7'b000_0000, 3'b000}: alu_operator_o = ALU_PADD8;
+            {7'b000_0000, 3'b001}: alu_operator_o = ALU_PADD16;
+            {7'b000_0000, 3'b010}: alu_operator_o = ALU_ADD;
+            // psub: 8-bit / 16-bit / 32-bit (scalar = SUB)
+            {7'b000_0001, 3'b000}: alu_operator_o = ALU_PSUB8;
+            {7'b000_0001, 3'b001}: alu_operator_o = ALU_PSUB16;
+            {7'b000_0001, 3'b010}: alu_operator_o = ALU_SUB;
+            // pand / por / pxor: bitwise, lane width irrelevant
+            {7'b000_1000, 3'b000}, {7'b000_1000, 3'b001}, {7'b000_1000, 3'b010}: alu_operator_o = ALU_AND;
+            {7'b000_1001, 3'b000}, {7'b000_1001, 3'b001}, {7'b000_1001, 3'b010}: alu_operator_o = ALU_OR;
+            {7'b000_1010, 3'b000}, {7'b000_1010, 3'b001}, {7'b000_1010, 3'b010}: alu_operator_o = ALU_XOR;
+            // pmul: 8-bit / 16-bit / 32-bit
+            {7'b001_0000, 3'b000}: alu_operator_o = ALU_PMUL8;
+            {7'b001_0000, 3'b001}: alu_operator_o = ALU_PMUL16;
+            {7'b001_0000, 3'b010}: alu_operator_o = ALU_PMUL32;
+            // padd_sat: 8-bit / 16-bit / 32-bit
+            {7'b010_0000, 3'b000}: alu_operator_o = ALU_PADD_SAT8;
+            {7'b010_0000, 3'b001}: alu_operator_o = ALU_PADD_SAT16;
+            {7'b010_0000, 3'b010}: alu_operator_o = ALU_PADD_SAT32;
+            default: ;
+          endcase
+        end
       end
 
       OPCODE_SYSTEM: begin
