@@ -23,16 +23,16 @@ int main(void) {
 
     // combined: dot-product using pmul8 + padd8_acc
     // [1,2,3,4] · [5,6,7,8] = 5+12+21+32 = 70
-    CHECK_ASSERT(13, simd_padd8_acc(simd_pmul8(PACK8(1,2,3,4), PACK8(5,6,7,8))) == 70u);
+    CHECK_ASSERT(13, simd_padd8_acc(simd_pmul8(PACK8(1, 2, 3, 4), PACK8(5, 6, 7, 8))) == 70u);
 
     // combined: pperm8 then padd8_acc (sum is order-independent)
-    CHECK_ASSERT(14, simd_padd8_acc(simd_pperm8(PACK8(1,2,3,4))) == 10u);
+    CHECK_ASSERT(14, simd_padd8_acc(simd_pperm8(PACK8(1, 2, 3, 4))) == 10u);
 
     // combined: psll8 then psub_sat8 (shift-then-saturate)
     // PACK8(1,2,3,4) << 4 = PACK8(0x10,0x20,0x30,0x40)
     // saturating sub PACK8(0xFF,0,0,0): [0x10-0xFF→0, 0x20-0, 0x30-0, 0x40-0]
-    CHECK_ASSERT(15, simd_psub_sat8(simd_psll8(PACK8(1,2,3,4), 4u),
-                                    PACK8(0xFF,0,0,0)) == PACK8(0,0x20,0x30,0x40));
+    CHECK_ASSERT(15,
+                 simd_psub_sat8(simd_psll8(PACK8(1, 2, 3, 4), 4u), PACK8(0xFF, 0, 0, 0)) == PACK8(0, 0x20, 0x30, 0x40));
 
     return 0;
 }
