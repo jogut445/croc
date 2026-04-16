@@ -185,20 +185,34 @@ package cve2_pkg;
 
     // SIMD32-IBEX packed SIMD (custom-0 opcode)
     // 8-bit lanes (SEW=8, 4 lanes)
-    ALU_PADD8,
-    ALU_PSUB8,
-    ALU_PMUL8,
-    ALU_PADD_SAT8,
-    ALU_PADD8_ACC,   // horizontal: rd = sum of all 4 byte lanes of rs1
+    ALU_PADD8,       // funct7=0x00 funct3=0
+    ALU_PSUB8,       // funct7=0x01 funct3=0
+    ALU_PMUL8,       // funct7=0x10 funct3=0
+    ALU_PADD_SAT8,   // funct7=0x20 funct3=0
+    ALU_PSUB_SAT8,   // funct7=0x21 funct3=0
+    ALU_PADD8_ACC,   // funct7=0x08 funct3=0  horizontal: rd = sum of 4 bytes
+    ALU_PPERM8,      // funct7=0x09 funct3=0  reverse byte order (rs2 unused)
+    ALU_POPCOUNT8,   // funct7=0x0a funct3=0  popcount per byte lane (rs2 unused)
+    ALU_PSLL8,       // funct7=0x18 funct3=0  shift left per byte by rs2[2:0]
+    ALU_PSRL8,       // funct7=0x19 funct3=0  shift right per byte by rs2[2:0]
+    ALU_PROL8,       // funct7=0x1a funct3=0  rotate left per byte by rs2[2:0]
     // 16-bit lanes (SEW=16, 2 lanes)
-    ALU_PADD16,
-    ALU_PSUB16,
-    ALU_PMUL16,
-    ALU_PADD_SAT16,
-    ALU_PADD16_ACC,  // horizontal: rd = sum of both halfword lanes of rs1
-    // 32-bit scalar (SEW=32)
-    ALU_PMUL32,
-    ALU_PADD_SAT32
+    ALU_PADD16,      // funct7=0x00 funct3=1
+    ALU_PSUB16,      // funct7=0x01 funct3=1
+    ALU_PMUL16,      // funct7=0x10 funct3=1
+    ALU_PADD_SAT16,  // funct7=0x20 funct3=1
+    ALU_PSUB_SAT16,  // funct7=0x21 funct3=1
+    ALU_PADD16_ACC,  // funct7=0x08 funct3=1  horizontal: rd = sum of 2 halfwords
+    ALU_PPERM16,     // funct7=0x09 funct3=1  swap halfwords (rs2 unused)
+    ALU_POPCOUNT16,  // funct7=0x0a funct3=1  popcount per halfword lane (rs2 unused)
+    ALU_PSLL16,      // funct7=0x18 funct3=1  shift left per halfword by rs2[3:0]
+    ALU_PSRL16,      // funct7=0x19 funct3=1  shift right per halfword by rs2[3:0]
+    ALU_PROL16,      // funct7=0x1a funct3=1  rotate left per halfword by rs2[3:0]
+    // 32-bit (SEW=32)
+    ALU_PADD_SAT32,  // funct7=0x20 funct3=2
+    ALU_PSUB_SAT32,  // funct7=0x21 funct3=2
+    ALU_POPCOUNT32,  // funct7=0x0a funct3=2  popcount full word (rs2 unused)
+    ALU_PROL32       // funct7=0x1a funct3=2  rotate left full word by rs2[4:0]
   } alu_op_e;
 
   typedef enum logic [1:0] {

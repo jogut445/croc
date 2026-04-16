@@ -36,11 +36,13 @@ grep -q "\[UART\] Hello World from Croc!" croc.log || exit 1
 ./run_verilator.sh --run ../sw/bin/test/print_config.hex
 "$SCRIPT_DIR/check_sim.sh" croc.log
 
-# run SIMD unit test with default config (SIMD on, iDMA off)
-./run_verilator.sh --run ../sw/bin/test/test_simd.hex
-grep -q "\[JTAG\] Simulation finished: SUCCESS" croc.log || \
-    { echo "SIMD unit test FAILED"; exit 1; }
-echo "SIMD unit test passed."
+# run SIMD unit tests with default config (SIMD on, iDMA off)
+for TEST in test_simd8 test_simd16 test_simd32 test_simd_matmul; do
+    ./run_verilator.sh --run ../sw/bin/test/${TEST}.hex
+    grep -q "\[JTAG\] Simulation finished: SUCCESS" croc.log || \
+        { echo "SIMD test ${TEST} FAILED"; exit 1; }
+    echo "SIMD test ${TEST} passed."
+done
 
 cd "$CROC_ROOT"
 
