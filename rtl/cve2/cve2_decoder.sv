@@ -574,18 +574,18 @@ module cve2_decoder #(
           {7'b000_0001, 3'b000}, {7'b000_0001, 3'b001},
           // padd.acc: horizontal 8-bit / 16-bit (rs2 unused)
           {7'b000_1000, 3'b000}, {7'b000_1000, 3'b001},
-          // pperm: reverse lanes 8-bit / 16-bit (rs2 unused)
-          {7'b000_1001, 3'b000}, {7'b000_1001, 3'b001},
-          // popcount: per-lane 8/16/32 (rs2 unused)
-          {7'b000_1010, 3'b000}, {7'b000_1010, 3'b001}, {7'b000_1010, 3'b010},
+          // pperm16: swap halfwords (rs2 unused); pperm8 removed — use RV32B xperm.b
+          {7'b000_1001, 3'b001},
+          // popcount: per-lane 8/16 (rs2 unused); 32-bit uses RV32B CPOP
+          {7'b000_1010, 3'b000}, {7'b000_1010, 3'b001},
           // pmul: 8-bit / 16-bit
           {7'b001_0000, 3'b000}, {7'b001_0000, 3'b001},
           // psll: shift left 8-bit / 16-bit
           {7'b001_1000, 3'b000}, {7'b001_1000, 3'b001},
           // psrl: shift right 8-bit / 16-bit
           {7'b001_1001, 3'b000}, {7'b001_1001, 3'b001},
-          // prol: rotate left 8-bit / 16-bit / 32-bit
-          {7'b001_1010, 3'b000}, {7'b001_1010, 3'b001}, {7'b001_1010, 3'b010},
+          // prol: rotate left 8-bit / 16-bit; 32-bit uses RV32B ROL
+          {7'b001_1010, 3'b000}, {7'b001_1010, 3'b001},
           // padd_sat: 8-bit / 16-bit / 32-bit
           {7'b010_0000, 3'b000}, {7'b010_0000, 3'b001}, {7'b010_0000, 3'b010},
           // psub_sat: 8-bit / 16-bit / 32-bit
@@ -1192,13 +1192,11 @@ module cve2_decoder #(
             // padd.acc: horizontal sum (rs2 unused)
             {7'b000_1000, 3'b000}: alu_operator_o = ALU_PADD8_ACC;
             {7'b000_1000, 3'b001}: alu_operator_o = ALU_PADD16_ACC;
-            // pperm: reverse lane order (rs2 unused)
-            {7'b000_1001, 3'b000}: alu_operator_o = ALU_PPERM8;
+            // pperm16: swap halfwords (rs2 unused); pperm8 → use xperm.b
             {7'b000_1001, 3'b001}: alu_operator_o = ALU_PPERM16;
-            // popcount: count set bits per lane (rs2 unused)
+            // popcount: count set bits per lane (rs2 unused); funct3=2 is RV32B CPOP
             {7'b000_1010, 3'b000}: alu_operator_o = ALU_POPCOUNT8;
             {7'b000_1010, 3'b001}: alu_operator_o = ALU_POPCOUNT16;
-            {7'b000_1010, 3'b010}: alu_operator_o = ALU_POPCOUNT32;
             // pmul: 8-bit / 16-bit
             {7'b001_0000, 3'b000}: alu_operator_o = ALU_PMUL8;
             {7'b001_0000, 3'b001}: alu_operator_o = ALU_PMUL16;
@@ -1208,10 +1206,9 @@ module cve2_decoder #(
             // psrl: lane-wise logical shift right
             {7'b001_1001, 3'b000}: alu_operator_o = ALU_PSRL8;
             {7'b001_1001, 3'b001}: alu_operator_o = ALU_PSRL16;
-            // prol: lane-wise rotate left
+            // prol: lane-wise rotate left; funct3=2 is RV32B ROL
             {7'b001_1010, 3'b000}: alu_operator_o = ALU_PROL8;
             {7'b001_1010, 3'b001}: alu_operator_o = ALU_PROL16;
-            {7'b001_1010, 3'b010}: alu_operator_o = ALU_PROL32;
             // padd_sat: 8-bit / 16-bit / 32-bit
             {7'b010_0000, 3'b000}: alu_operator_o = ALU_PADD_SAT8;
             {7'b010_0000, 3'b001}: alu_operator_o = ALU_PADD_SAT16;

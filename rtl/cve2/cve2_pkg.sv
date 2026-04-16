@@ -191,7 +191,7 @@ package cve2_pkg;
     ALU_PADD_SAT8,   // funct7=0x20 funct3=0
     ALU_PSUB_SAT8,   // funct7=0x21 funct3=0
     ALU_PADD8_ACC,   // funct7=0x08 funct3=0  horizontal: rd = sum of 4 bytes
-    ALU_PPERM8,      // funct7=0x09 funct3=0  reverse byte order (rs2 unused)
+    // pperm8 removed — use RV32B ALU_XPERM_B (xperm.b rs1, rs2=PACK8(0,1,2,3))
     ALU_POPCOUNT8,   // funct7=0x0a funct3=0  popcount per byte lane (rs2 unused)
     ALU_PSLL8,       // funct7=0x18 funct3=0  shift left per byte by rs2[2:0]
     ALU_PSRL8,       // funct7=0x19 funct3=0  shift right per byte by rs2[2:0]
@@ -208,11 +208,9 @@ package cve2_pkg;
     ALU_PSLL16,      // funct7=0x18 funct3=1  shift left per halfword by rs2[3:0]
     ALU_PSRL16,      // funct7=0x19 funct3=1  shift right per halfword by rs2[3:0]
     ALU_PROL16,      // funct7=0x1a funct3=1  rotate left per halfword by rs2[3:0]
-    // 32-bit (SEW=32)
+    // 32-bit (SEW=32) — ROL/CPOP use existing RV32B ALU_ROL/ALU_CPOP
     ALU_PADD_SAT32,  // funct7=0x20 funct3=2
-    ALU_PSUB_SAT32,  // funct7=0x21 funct3=2
-    ALU_POPCOUNT32,  // funct7=0x0a funct3=2  popcount full word (rs2 unused)
-    ALU_PROL32       // funct7=0x1a funct3=2  rotate left full word by rs2[4:0]
+    ALU_PSUB_SAT32   // funct7=0x21 funct3=2
   } alu_op_e;
 
   typedef enum logic [1:0] {

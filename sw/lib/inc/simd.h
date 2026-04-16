@@ -42,12 +42,7 @@ static inline uint32_t simd_padd8_acc(uint32_t a) {
     asm volatile(".insn r 0x0b, 0,  8, %0, %1, zero" : "=r"(r) : "r"(a));
     return r;
 }
-// Permute: reverse byte order {b3,b2,b1,b0}->{b0,b1,b2,b3}  (rs2 unused)
-static inline uint32_t simd_pperm8(uint32_t a) {
-    uint32_t r;
-    asm volatile(".insn r 0x0b, 0,  9, %0, %1, zero" : "=r"(r) : "r"(a));
-    return r;
-}
+// pperm8 removed — use RV32B xperm.b with rs2=PACK8(0,1,2,3) for byte reversal
 // Popcount: count set bits per byte lane  (rs2 unused)
 static inline uint32_t simd_popcount8(uint32_t a) {
     uint32_t r;
@@ -145,18 +140,7 @@ static inline uint32_t simd_psub_sat32(uint32_t a, uint32_t b) {
     asm volatile(".insn r 0x0b, 2, 33, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b));
     return r;
 }
-// Popcount: count set bits in full 32-bit word  (rs2 unused)
-static inline uint32_t simd_popcount32(uint32_t a) {
-    uint32_t r;
-    asm volatile(".insn r 0x0b, 2, 10, %0, %1, zero" : "=r"(r) : "r"(a));
-    return r;
-}
-// Rotate left: amount from rs2[4:0]
-static inline uint32_t simd_prol32(uint32_t a, uint32_t b) {
-    uint32_t r;
-    asm volatile(".insn r 0x0b, 2, 26, %0, %1, %2" : "=r"(r) : "r"(a), "r"(b));
-    return r;
-}
+// Note: 32-bit popcount → __builtin_popcount(); 32-bit rotate → RV32B ROL instruction
 
 // ---------------------------------------------------------------------------
 // Packing Wrappers

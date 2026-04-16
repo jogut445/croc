@@ -1323,7 +1323,7 @@ module cve2_alu #(
 
     // --- 8-bit lanes (4 lanes) ---
     logic [31:0] padd8_r, psub8_r, pmul8_r, padd_sat8_r, psub_sat8_r;
-    logic [31:0] pperm8_r, psll8_r, psrl8_r, prol8_r, popcount8_r;
+    logic [31:0] psll8_r, psrl8_r, prol8_r, popcount8_r;
     logic [8:0]  sat8_sum [4];
     logic [8:0]  sat8_diff [4];
     logic [2:0]  shamt8;
@@ -1343,10 +1343,6 @@ module cve2_alu #(
       assign prol8_r[8*i+:8]      = (operand_a_i[8*i+:8] << shamt8) |
                                      (operand_a_i[8*i+:8] >> (3'b0 - shamt8));
     end
-    // pperm8: reverse byte lane order {b3,b2,b1,b0} -> {b0,b1,b2,b3}
-    assign pperm8_r = {operand_a_i[7:0], operand_a_i[15:8],
-                       operand_a_i[23:16], operand_a_i[31:24]};
-
     always_comb begin
       popcount8_r = '0;
       for (int unsigned b = 0; b < 4; b++) begin
@@ -1390,24 +1386,14 @@ module cve2_alu #(
       end
     end
 
-    // --- 32-bit ---
+    // --- 32-bit --- (prol32→ALU_ROL, popcount32→ALU_CPOP from RV32B)
     logic [32:0] sat32_sum, sat32_diff;
-    logic [31:0] padd_sat32_r, psub_sat32_r, prol32_r, popcount32_r;
-    logic [4:0]  shamt32;
+    logic [31:0] padd_sat32_r, psub_sat32_r;
 
-    assign shamt32      = operand_b_i[4:0];
     assign sat32_sum    = {1'b0, operand_a_i} + {1'b0, operand_b_i};
     assign padd_sat32_r = sat32_sum[32]  ? 32'hFFFF_FFFF : sat32_sum[31:0];
     assign sat32_diff   = {1'b0, operand_a_i} - {1'b0, operand_b_i};
     assign psub_sat32_r = sat32_diff[32] ? 32'h0000_0000 : sat32_diff[31:0];
-    assign prol32_r     = (operand_a_i << shamt32) | (operand_a_i >> (5'b0 - shamt32));
-
-    always_comb begin
-      popcount32_r = '0;
-      for (int unsigned k = 0; k < 32; k++) begin
-        popcount32_r = popcount32_r + {31'b0, operand_a_i[k]};
-      end
-    end
 
     // --- Horizontal accumulate (rs2 unused) ---
     logic [31:0] padd8_acc_r, padd16_acc_r;
@@ -1423,7 +1409,6 @@ module cve2_alu #(
         ALU_PADD_SAT8:   simd_result = padd_sat8_r;
         ALU_PSUB_SAT8:   simd_result = psub_sat8_r;
         ALU_PADD8_ACC:   simd_result = padd8_acc_r;
-        ALU_PPERM8:      simd_result = pperm8_r;
         ALU_POPCOUNT8:   simd_result = popcount8_r;
         ALU_PSLL8:       simd_result = psll8_r;
         ALU_PSRL8:       simd_result = psrl8_r;
@@ -1441,8 +1426,6 @@ module cve2_alu #(
         ALU_PROL16:      simd_result = prol16_r;
         ALU_PADD_SAT32:  simd_result = padd_sat32_r;
         ALU_PSUB_SAT32:  simd_result = psub_sat32_r;
-        ALU_POPCOUNT32:  simd_result = popcount32_r;
-        ALU_PROL32:      simd_result = prol32_r;
         default:         simd_result = '0;
       endcase
     end
@@ -1532,14 +1515,13 @@ module cve2_alu #(
       // SIMD32-IBEX packed SIMD operations
       ALU_PADD8,      ALU_PSUB8,      ALU_PMUL8,
       ALU_PADD_SAT8,  ALU_PSUB_SAT8,  ALU_PADD8_ACC,
-      ALU_PPERM8,     ALU_POPCOUNT8,
+      ALU_POPCOUNT8,
       ALU_PSLL8,      ALU_PSRL8,      ALU_PROL8,
       ALU_PADD16,     ALU_PSUB16,     ALU_PMUL16,
       ALU_PADD_SAT16, ALU_PSUB_SAT16, ALU_PADD16_ACC,
       ALU_PPERM16,    ALU_POPCOUNT16,
       ALU_PSLL16,     ALU_PSRL16,     ALU_PROL16,
-      ALU_PADD_SAT32, ALU_PSUB_SAT32,
-      ALU_POPCOUNT32, ALU_PROL32: result_o = simd_result;
+      ALU_PADD_SAT32, ALU_PSUB_SAT32: result_o = simd_result;
 
       default: ;
     endcase
