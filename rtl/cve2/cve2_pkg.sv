@@ -191,7 +191,6 @@ package cve2_pkg;
     ALU_PADD_SAT8,   // funct7=0x20 funct3=0
     ALU_PSUB_SAT8,   // funct7=0x21 funct3=0
     ALU_PADD8_ACC,   // funct7=0x08 funct3=0  horizontal: rd = sum of 4 bytes
-    // pperm8 removed — use RV32B ALU_XPERM_B (xperm.b rs1, rs2=PACK8(0,1,2,3))
     ALU_POPCOUNT8,   // funct7=0x0a funct3=0  popcount per byte lane (rs2 unused)
     ALU_PSLL8,       // funct7=0x18 funct3=0  shift left per byte by rs2[2:0]
     ALU_PSRL8,       // funct7=0x19 funct3=0  shift right per byte by rs2[2:0]
