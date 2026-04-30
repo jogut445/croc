@@ -17,7 +17,7 @@ int main() {
 
     printf("Reading eight 32-bit words from ROM:\n");
     for (int i = 0; i < 32; i++) {
-        uint32_t word = *reg32(USER_ROM_BASE_ADDR, i * 4);
+        uint8_t word = *reg32(USER_ROM_BASE_ADDR, i * 4);
         printf("%c", word);
     }
     printf("\n");

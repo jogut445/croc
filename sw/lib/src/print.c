@@ -56,6 +56,10 @@ void printf(const char *fmt, ...) {
                 for (int j = idx - 1; j >= 0; j--) {
                     putchar(buffer[j]);
                 }
+            } else if (*fmt == 'c') { // char
+                char chr = (char) va_arg(args, int);
+                putchar(chr);
+            
             } else if (*fmt == 'u') { // unsigned decimal
                 idx = format_uint32_dec(buffer, va_arg(args, unsigned int));
                 for (int j = idx - 1; j >= 0; j--) {
