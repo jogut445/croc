@@ -24,7 +24,7 @@ expected_lines=(
   "\[UART\]   GPIO\s*: present"
   "\[UART\]   Timer\s*: present"
   "\[UART\]   iDMA\s*: not present"
-  "\[UART\]   User ROM\s*: not present"
+  "\[UART\]   User ROM\s*: \"F\"" 
 )
 
 for line in "${expected_lines[@]}"; do
