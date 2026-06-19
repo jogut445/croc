@@ -21,6 +21,8 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   input  mgr_obi_rsp_t user_mgr_obi_rsp_i,
 
   input  logic [      GpioCount-1:0] gpio_in_sync_i, // synchronized GPIO inputs
+  output logic [      GpioCount-1:0] gpio_out_o,     // GPIO outputs from user domain (SPI mux)
+  output logic [      GpioCount-1:0] gpio_oen_o,     // GPIO output enables from user domain
   output logic [NumExternalIrqs-1:0] interrupts_o    // interrupts to core
 );
 
@@ -125,18 +127,19 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
     .obi_rsp_o ( user_rom_obi_rsp )
   );
 
-  obi_err_sbr #(
-    .ObiCfg      ( SbrObiCfg     ),
-    .obi_req_t   ( sbr_obi_req_t ),
-    .obi_rsp_t   ( sbr_obi_rsp_t ),
-    .NumMaxTrans ( 1             ),
-    .RspData     ( 32'hBADCAB1E  )
-  ) i_your_design_goes_here (
+  spi_qspi_obi_wrap #(
+    .GpioCount    ( GpioCount ),
+    .NUM_LINES    ( 16        ),
+    .LINE_SIZE    ( 32        ),
+    .RESET_CYCLES ( 999       )
+  ) i_spi_qspi (
     .clk_i,
     .rst_ni,
-    .testmode_i ( testmode_i          ),
-    .obi_req_i  ( user_design_obi_req ),
-    .obi_rsp_o  ( user_design_obi_rsp )
+    .obi_req_i      ( user_design_obi_req ),
+    .obi_rsp_o      ( user_design_obi_rsp ),
+    .gpio_in_sync_i ( gpio_in_sync_i      ),
+    .gpio_out_o     ( gpio_out_o          ),
+    .gpio_oen_o     ( gpio_oen_o          )
   );
 
   // Error Subordinate

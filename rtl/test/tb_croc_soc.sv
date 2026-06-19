@@ -29,27 +29,31 @@ module tb_croc_soc #(
   logic uart_rx;
   logic uart_tx;
 
-  // Signals partially controlled by the VIP
+  // VIP drives gpio_in_vip; we merge flash SIO back in for SPI pins
+  logic [GpioCount-1:0] gpio_in_vip;
   logic [GpioCount-1:0] gpio_in;
   logic [GpioCount-1:0] gpio_out;
   logic [GpioCount-1:0] gpio_out_en;
-
-  // Signals controlled by the testbench
 
   /////////////////////////////
   //  Command Line Arguments //
   /////////////////////////////
 
   string binary_path;
+  string flash_hex_path;
+  bit    run_flash_test;
 
   initial begin
-    // $value$plusargs defines what to look for (here +binary=...)
     if ($value$plusargs("binary=%s", binary_path)) begin
       $display("Running program: %s", binary_path);
     end else begin
       $display("No binary path provided. Running helloworld.");
       binary_path = "../sw/bin/helloworld.hex";
     end
+    run_flash_test = $test$plusargs("flash_test");
+    if (run_flash_test) $display("SPI flash XiP test enabled.");
+    if (!$value$plusargs("flash=%s", flash_hex_path))
+      flash_hex_path = "";
   end
 
   ////////////
@@ -81,8 +85,75 @@ module tb_croc_soc #(
     .uart_tx_i     ( uart_tx     ),
     .gpio_out_en_i ( gpio_out_en ),
     .gpio_out_i    ( gpio_out    ),
-    .gpio_in_o     ( gpio_in     )
+    .gpio_in_o     ( gpio_in_vip )  // VIP drives intermediate signal
   );
+
+  /////////////////////
+  //  SPI Flash VIP  //
+  /////////////////////
+  // The SST26WF080B QSPI flash model is connected to configurable GPIO pins.
+  // SCK and CSN are always driven as outputs by the SoC when SPI is enabled.
+  // SIO[3:0] are bidirectional: the SoC drives them during command/address
+  // phases (gpio_out_en=1) and the flash drives them during data readout.
+
+  // SCK: always output from SoC, no tristate needed
+  wire flash_sck = gpio_out[SpiPinSck];
+
+  // CSN: always output from SoC; default high (deselected) when not driven
+  wire flash_csn = gpio_out_en[SpiPinCsn] ? gpio_out[SpiPinCsn] : 1'b1;
+
+  // SIO: bidirectional – SoC drives when gpio_out_en=1, flash drives otherwise
+  wire [3:0] spi_sio;
+  assign spi_sio[0] = gpio_out_en[SpiPinIo0] ? gpio_out[SpiPinIo0] : 1'bz;
+  assign spi_sio[1] = gpio_out_en[SpiPinIo1] ? gpio_out[SpiPinIo1] : 1'bz;
+  assign spi_sio[2] = gpio_out_en[SpiPinIo2] ? gpio_out[SpiPinIo2] : 1'bz;
+  assign spi_sio[3] = gpio_out_en[SpiPinIo3] ? gpio_out[SpiPinIo3] : 1'bz;
+
+  sst26wf080b i_spi_flash (
+    .SCK ( flash_sck ),
+    .CEb ( flash_csn ),
+    .SIO ( spi_sio   )
+  );
+
+  // Merge VIP GPIO inputs with flash SIO readback.
+  // The SPI wrapper reads gpio_in_sync_i[cfg_io*_pin] for SPI DIN.
+  // When the SoC releases the SIO lines (gpio_out_en=0), the flash drives
+  // them and we must feed those values back through gpio_in.
+  // The SoC has a 2-FF synchronizer on gpio_i, which adds 2-cycle latency
+  // but is fine for behavioural simulation with a slow-speed model.
+  always_comb begin
+    gpio_in = gpio_in_vip;
+    // Pull to 0 when undriven to avoid propagating X through synchronizer
+    gpio_in[SpiPinIo0] = (spi_sio[0] === 1'bz) ? 1'b0 : spi_sio[0];
+    gpio_in[SpiPinIo1] = (spi_sio[1] === 1'bz) ? 1'b0 : spi_sio[1];
+    gpio_in[SpiPinIo2] = (spi_sio[2] === 1'bz) ? 1'b0 : spi_sio[2];
+    gpio_in[SpiPinIo3] = (spi_sio[3] === 1'bz) ? 1'b0 : spi_sio[3];
+  end
+
+  // Flash memory initialisation.
+  // If +flash=<file.hex> is given, load the whole memory from that file.
+  // Otherwise write a recognisable test pattern at the first XiP offset
+  // (flash byte 0x002000, which maps to OBI address SpiXipFlashBase).
+  //
+  // Expected HRDATA for a 32-bit read at SpiXipFlashBase with this pattern:
+  //   {flash[0x2003], flash[0x2002], flash[0x2001], flash[0x2000]}
+  //   = {8'h44, 8'h33, 8'h22, 8'h11} = 32'h44332211
+  localparam bit [31:0] FlashTestWord = 32'h4433_2211;
+  localparam bit [23:0] FlashTestAddr = 24'h002000; // matches SpiXipFlashBase[23:0]
+
+  initial begin
+    #1; // let the model initialise its memory array first
+    if (flash_hex_path != "") begin
+      $display("@%t | [FLASH] Loading %s into flash memory", $time, flash_hex_path);
+      $readmemh(flash_hex_path, i_spi_flash.I0.memory);
+    end else begin
+      $display("@%t | [FLASH] Initialising test pattern at 0x%06h", $time, FlashTestAddr);
+      i_spi_flash.I0.memory[FlashTestAddr + 0] = 8'h11;
+      i_spi_flash.I0.memory[FlashTestAddr + 1] = 8'h22;
+      i_spi_flash.I0.memory[FlashTestAddr + 2] = 8'h33;
+      i_spi_flash.I0.memory[FlashTestAddr + 3] = 8'h44;
+    end
+  end
 
   ////////////
   //  DUT   //
@@ -112,6 +183,64 @@ module tb_croc_soc #(
     .gpio_out_en_o ( gpio_out_en )
   );
 
+  /////////////////////
+  //  SPI XiP Test   //
+  /////////////////////
+  // Configures the SPI pin-mux registers via JTAG system-bus accesses, then
+  // reads the first word from the XiP flash window and checks it against the
+  // expected value.  A long sbbusy poll loop is used because the first access
+  // triggers the flash software-reset sequence (~1000 clock cycles) followed
+  // by a cache-line fetch (~156 cycles at LINE_SIZE=32).
+  task automatic spi_xip_test;
+    automatic logic [31:0] rd_data;
+
+    $display("@%t | [SPI] Configuring GPIO pin mux for SPI", $time);
+    i_vip.jtag_write_reg32(SpiCfgSckPin, SpiPinSck);
+    i_vip.jtag_write_reg32(SpiCfgCsnPin, SpiPinCsn);
+    i_vip.jtag_write_reg32(SpiCfgIo0Pin, SpiPinIo0);
+    i_vip.jtag_write_reg32(SpiCfgIo1Pin, SpiPinIo1);
+    i_vip.jtag_write_reg32(SpiCfgIo2Pin, SpiPinIo2);
+    i_vip.jtag_write_reg32(SpiCfgIo3Pin, SpiPinIo3);
+
+    $display("@%t | [SPI] Enabling SPI GPIO override (CFG_CTRL[0]=1)", $time);
+    i_vip.jtag_write_reg32(SpiCfgCtrl, 32'h1);
+
+    $display("@%t | [SPI] Reading first XiP word (triggers flash reset + cache fill)...", $time);
+    begin : xip_read
+      automatic dm::sbcs_t sbcs;
+      // Initiate system-bus read with sbreadonaddr
+      sbcs = dm::sbcs_t'{sbreadonaddr: 1'b1, sbaccess: 2, default: '0};
+      i_vip.jtag_write(dm::SBCS, sbcs, 0, 0);
+      // Write address – this triggers the OBI read and starts the flash FSM.
+      // Use wait_sba=1 to poll sbbusy until the transaction completes.
+      // The flash reset takes ~1000 sys_clk cycles; the cache-line fetch
+      // takes ~156 cycles.  Both are handled transparently by the OBI stall.
+      i_vip.jtag_write(dm::SBAddress0, SpiXipFlashBase, 0, 1); // wait_sba=1
+      i_vip.jtag_dbg.read_dmi_exp_backoff(dm::SBData0, rd_data);
+    end
+
+    $display("@%t | [SPI] Read  0x%08h from XiP address 0x%08h", $time, rd_data, SpiXipFlashBase);
+    $display("@%t | [SPI] Expect 0x%08h", $time, FlashTestWord);
+    if (rd_data === FlashTestWord) begin
+      $display("@%t | [SPI] PASS: data matches expected value", $time);
+    end else begin
+      $error  ("@%t | [SPI] FAIL: got 0x%08h, expected 0x%08h", $time, rd_data, FlashTestWord);
+    end
+
+    // Second read to the same address: should hit the cache (fast path)
+    $display("@%t | [SPI] Second read (should hit D-mapped cache)...", $time);
+    i_vip.jtag_read_reg32(SpiXipFlashBase, rd_data, 20);
+    if (rd_data === FlashTestWord)
+      $display("@%t | [SPI] Cache hit PASS", $time);
+    else
+      $error  ("@%t | [SPI] Cache hit FAIL: 0x%08h", $time, rd_data);
+
+    // Read next word in the same cache line (offset +4)
+    $display("@%t | [SPI] Reading word at offset +4 (same cache line)...", $time);
+    i_vip.jtag_read_reg32(SpiXipFlashBase + 4, rd_data, 20);
+    $display("@%t | [SPI] Word+4 = 0x%08h", $time, rd_data);
+  endtask
+
   /////////////////
   //  Testbench  //
   /////////////////
@@ -127,6 +256,17 @@ module tb_croc_soc #(
     // init jtag
     i_vip.jtag_init();
 
+    // -----------------------------------------------------------------------
+    // Optional: SPI XiP flash test (enable with +flash_test on sim command)
+    // -----------------------------------------------------------------------
+    if (run_flash_test) begin
+      spi_xip_test();
+      repeat(20) @(posedge sys_clk);
+    end
+
+    // -----------------------------------------------------------------------
+    // Standard binary-load and run test
+    // -----------------------------------------------------------------------
     // write test value to sram
     i_vip.jtag_write_reg32(SramBaseAddr, 32'h1234_5678, 1'b1);
 
