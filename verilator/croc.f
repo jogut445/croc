@@ -176,9 +176,9 @@
 ../rtl/clint/clint.sv
 ../rtl/obi_timer/obi_timer.sv
 ../rtl/croc_domain.sv
-../EF_QSPI_XIP_CTRL/hdl/rtl/DMC.v
-../EF_QSPI_XIP_CTRL/hdl/rtl/EF_QSPI_XIP_CTRL.v
-../EF_QSPI_XIP_CTRL/hdl/rtl/bus_wrappers/EF_QSPI_XIP_CTRL_AHBL.v
+../rtl/EF_QSPI_XIP_CTRL/hdl/rtl/DMC.v
+../rtl/EF_QSPI_XIP_CTRL/hdl/rtl/EF_QSPI_XIP_CTRL.v
+../rtl/EF_QSPI_XIP_CTRL/hdl/rtl/bus_wrappers/EF_QSPI_XIP_CTRL_AHBL.v
 ../rtl/user_domain/user_rom.sv
 ../rtl/user_domain/spi_qspi_obi_wrap.sv
 ../rtl/user_domain.sv
@@ -186,5 +186,6 @@
 ../rtl/croc_chip.sv
 ../rtl/test/tb_croc_pkg.sv
 ../rtl/test/croc_vip.sv
+../rtl/test/spi_flash_model.sv
 ../rtl/test/tb_croc_soc.sv
 

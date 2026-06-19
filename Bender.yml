@@ -46,10 +46,10 @@ sources:
       - rtl/gpio/gpio.sv
       - rtl/clint/clint.sv
       - rtl/obi_timer/obi_timer.sv
-      # EF_QSPI_XIP_CTRL (QSPI XiP flash controller + direct-mapped cache)
-      - EF_QSPI_XIP_CTRL/hdl/rtl/EF_QSPI_XIP_CTRL.v
-      - EF_QSPI_XIP_CTRL/hdl/rtl/DMC.v
-      - EF_QSPI_XIP_CTRL/hdl/rtl/bus_wrappers/EF_QSPI_XIP_CTRL_AHBL.v
+      # QSPI XiP flash controller + direct-mapped cache
+      - rtl/EF_QSPI_XIP_CTRL/hdl/rtl/EF_QSPI_XIP_CTRL.v
+      - rtl/EF_QSPI_XIP_CTRL/hdl/rtl/DMC.v
+      - rtl/EF_QSPI_XIP_CTRL/hdl/rtl/bus_wrappers/EF_QSPI_XIP_CTRL_AHBL.v
       # Level 2
       - rtl/croc_domain.sv
       - rtl/user_domain/user_rom.sv
@@ -71,9 +71,9 @@ sources:
 
   - target: any(simulation, verilator)
     files:
-      - EF_QSPI_XIP_CTRL/verify/vip/sst26wf080b.v
       - rtl/test/tb_croc_pkg.sv
       - rtl/test/croc_vip.sv
+      - rtl/test/spi_flash_model.sv
       - rtl/test/tb_croc_soc.sv
 
   - target: genesys2

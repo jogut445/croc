@@ -21,7 +21,7 @@ set -u  # Error on undefined vars
 # Source environment
 source "../env.sh"
 
-VSIM=${VSIM:-questa-2025.3 vsim}
+VSIM=${VSIM:-vsim}
 
 mkdir -p reports
 
@@ -45,7 +45,7 @@ Options:
     --build-netlist     Compile Croc post-synthesis netlist in VSIM
     --run BINARY        Run binary in VSIM
     --run-gui BINARY    Prepare running binary in VSIM, open GUI
-    --flash HEX         Load HEX file into SPI flash memory (implies --flash-test)
+    --flash HEX         Load HEX file into SPI flash memory
     --flash-test        Run SPI XiP flash test with built-in test pattern
 
 Example:
@@ -174,15 +174,16 @@ run_vsim() {
     local extra_args=""
     [ -n "$FLASH_HEX" ]   && extra_args="$extra_args +flash=$FLASH_HEX"
     [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
-    run_cmd "${VSIM} \
-        +binary=$binary $extra_args \
-        -c \
+    ${VSIM} -c \
+        +binary="$binary" $extra_args \
+        -voptargs="+acc=npr -suppress 7063" \
         tb_croc_soc \
         -t 1ns \
         -suppress vsim-3009 \
         -suppress vsim-8683 \
         -suppress vsim-8386 \
-        -do \"run -a; quit\""
+        -do "run -a; quit" \
+        | tee reports/sim.log
 }
 
 
@@ -193,10 +194,10 @@ run_vsim_gui() {
     [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
     run_cmd "${VSIM} \
         +binary=$binary $extra_args \
+        -voptargs="+acc=npr -suppress 7063" \
         -gui \
         tb_croc_soc \
         -t 1ns \
-        -voptargs=+acc \
         -suppress vsim-3009 \
         -suppress vsim-8683 \
         -suppress vsim-8386"
@@ -262,7 +263,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --flash)
             FLASH_HEX=$2
-            FLASH_TEST=1
             shift 2
             ;;
         --flash-test)
@@ -280,6 +280,6 @@ done
 # execute in logical order: flist → build → run
 [ "$DO_FLIST"        = 1 ] && { generate_rtl_flist; generate_netlist_flist; }
 [ "$DO_BUILD"        = 1 ] && compile_rtl
-[ "$DO_BUILD_NETLIST"= 1 ] && compile_netlist
+[ "$DO_BUILD_NETLIST" = 1 ] && compile_netlist
 [ -n "$RUN_BINARY"       ] && run_vsim     "$RUN_BINARY"
 [ -n "$RUN_GUI_BINARY"   ] && run_vsim_gui "$RUN_GUI_BINARY"

@@ -400,6 +400,11 @@ if {[catch { vlog -incr -sv \
     "$ROOT/rtl/clint/clint.sv" \
     "$ROOT/rtl/obi_timer/obi_timer.sv" \
     "$ROOT/rtl/croc_domain.sv" \
+    "$ROOT/rtl/EF_QSPI_XIP_CTRL/hdl/rtl/DMC.v" \
+    "$ROOT/rtl/EF_QSPI_XIP_CTRL/hdl/rtl/EF_QSPI_XIP_CTRL.v" \
+    "$ROOT/rtl/EF_QSPI_XIP_CTRL/hdl/rtl/bus_wrappers/EF_QSPI_XIP_CTRL_AHBL.v" \
+    "$ROOT/rtl/user_domain/user_rom.sv" \
+    "$ROOT/rtl/user_domain/spi_qspi_obi_wrap.sv" \
     "$ROOT/rtl/user_domain.sv" \
     "$ROOT/rtl/croc_soc.sv" \
 }]} {return 1}
@@ -435,6 +440,7 @@ if {[catch { vlog -incr -sv \
     "+incdir+$ROOT/rtl/obi/include" \
     "$ROOT/rtl/test/tb_croc_pkg.sv" \
     "$ROOT/rtl/test/croc_vip.sv" \
+    "$ROOT/rtl/test/spi_flash_model.sv" \
     "$ROOT/rtl/test/tb_croc_soc.sv" \
 }]} {return 1}
 

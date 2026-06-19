@@ -89,50 +89,41 @@ module tb_croc_soc #(
   );
 
   /////////////////////
-  //  SPI Flash VIP  //
+  //  SPI Flash Model //
   /////////////////////
-  // Not supported under Verilator: the sst26wf080b model uses named-disable
-  // and defparam constructs that Verilator cannot compile.
-  // Under vsim the full model is instantiated; under Verilator gpio_in is
-  // wired directly from the VIP (SPI XiP tests are skipped automatically).
-`ifndef VERILATOR
-  // The SST26WF080B QSPI flash model is connected to configurable GPIO pins.
-  // SCK and CSN are always driven as outputs by the SoC when SPI is enabled.
-  // SIO[3:0] are bidirectional: the SoC drives them during command/address
-  // phases (gpio_out_en=1) and the flash drives them during data readout.
+  // Simple behavioral QSPI flash, works in both Verilator and vsim.
+  // SoC drives SIO when gpio_out_en=1; model drives when SIO_oen=1.
+  // The model uses separate SIO_in/SIO_out/SIO_oen ports (no inout).
 
-  // SCK: always output from SoC, no tristate needed
-  wire flash_sck = gpio_out[SpiPinSck];
+  wire        flash_sck = gpio_out[SpiPinSck];
+  wire        flash_csn = gpio_out_en[SpiPinCsn] ? gpio_out[SpiPinCsn] : 1'b1;
 
-  // CSN: always output from SoC; default high (deselected) when not driven
-  wire flash_csn = gpio_out_en[SpiPinCsn] ? gpio_out[SpiPinCsn] : 1'b1;
+  wire [3:0]  sio_soc_out = {gpio_out[SpiPinIo3],    gpio_out[SpiPinIo2],
+                              gpio_out[SpiPinIo1],    gpio_out[SpiPinIo0]};
+  wire [3:0]  sio_soc_oen = {gpio_out_en[SpiPinIo3], gpio_out_en[SpiPinIo2],
+                              gpio_out_en[SpiPinIo1], gpio_out_en[SpiPinIo0]};
 
-  // SIO: bidirectional – SoC drives when gpio_out_en=1, flash drives otherwise
-  wire [3:0] spi_sio;
-  assign spi_sio[0] = gpio_out_en[SpiPinIo0] ? gpio_out[SpiPinIo0] : 1'bz;
-  assign spi_sio[1] = gpio_out_en[SpiPinIo1] ? gpio_out[SpiPinIo1] : 1'bz;
-  assign spi_sio[2] = gpio_out_en[SpiPinIo2] ? gpio_out[SpiPinIo2] : 1'bz;
-  assign spi_sio[3] = gpio_out_en[SpiPinIo3] ? gpio_out[SpiPinIo3] : 1'bz;
+  wire [3:0]  flash_sio_out;
+  wire        flash_sio_oen;
 
-  sst26wf080b i_spi_flash (
-    .SCK ( flash_sck ),
-    .CEb ( flash_csn ),
-    .SIO ( spi_sio   )
+  spi_flash_model i_flash (
+    .SCK     ( flash_sck                                  ),
+    .CSN     ( flash_csn                                  ),
+    .SIO_in  ( sio_soc_oen ? sio_soc_out : 4'b0          ),
+    .SIO_out ( flash_sio_out                              ),
+    .SIO_oen ( flash_sio_oen                              )
   );
 
-  // Merge VIP GPIO inputs with flash SIO readback.
-  // The SPI wrapper reads gpio_in_sync_i[cfg_io*_pin] for SPI DIN.
-  // When the SoC releases the SIO lines (gpio_out_en=0), the flash drives
-  // them and we must feed those values back through gpio_in.
-  // The SoC has a 2-FF synchronizer on gpio_i, which adds 2-cycle latency
-  // but is fine for behavioural simulation with a slow-speed model.
+  // Merge VIP GPIO inputs with flash SIO readback for the SoC's gpio_i port.
+  // When the SoC releases a SIO pin (gpio_out_en=0) and the model is driving
+  // (flash_sio_oen=1), route the model's output back; otherwise keep the VIP
+  // value (0 for undriven lines to avoid X propagation through the synchronizer).
   always_comb begin
     gpio_in = gpio_in_vip;
-    // Pull to 0 when undriven to avoid propagating X through synchronizer
-    gpio_in[SpiPinIo0] = (spi_sio[0] === 1'bz) ? 1'b0 : spi_sio[0];
-    gpio_in[SpiPinIo1] = (spi_sio[1] === 1'bz) ? 1'b0 : spi_sio[1];
-    gpio_in[SpiPinIo2] = (spi_sio[2] === 1'bz) ? 1'b0 : spi_sio[2];
-    gpio_in[SpiPinIo3] = (spi_sio[3] === 1'bz) ? 1'b0 : spi_sio[3];
+    gpio_in[SpiPinIo0] = sio_soc_oen[0] ? sio_soc_out[0] : (flash_sio_oen ? flash_sio_out[0] : 1'b0);
+    gpio_in[SpiPinIo1] = sio_soc_oen[1] ? sio_soc_out[1] : (flash_sio_oen ? flash_sio_out[1] : 1'b0);
+    gpio_in[SpiPinIo2] = sio_soc_oen[2] ? sio_soc_out[2] : (flash_sio_oen ? flash_sio_out[2] : 1'b0);
+    gpio_in[SpiPinIo3] = sio_soc_oen[3] ? sio_soc_out[3] : (flash_sio_oen ? flash_sio_out[3] : 1'b0);
   end
 
   // Flash memory initialisation.
@@ -150,19 +141,15 @@ module tb_croc_soc #(
     #1; // let the model initialise its memory array first
     if (flash_hex_path != "") begin
       $display("@%t | [FLASH] Loading %s into flash memory", $time, flash_hex_path);
-      $readmemh(flash_hex_path, i_spi_flash.I0.memory);
+      $readmemh(flash_hex_path, i_flash.memory);
     end else begin
       $display("@%t | [FLASH] Initialising test pattern at 0x%06h", $time, FlashTestAddr);
-      i_spi_flash.I0.memory[FlashTestAddr + 0] = 8'h11;
-      i_spi_flash.I0.memory[FlashTestAddr + 1] = 8'h22;
-      i_spi_flash.I0.memory[FlashTestAddr + 2] = 8'h33;
-      i_spi_flash.I0.memory[FlashTestAddr + 3] = 8'h44;
+      i_flash.memory[FlashTestAddr + 0] = 8'h11;
+      i_flash.memory[FlashTestAddr + 1] = 8'h22;
+      i_flash.memory[FlashTestAddr + 2] = 8'h33;
+      i_flash.memory[FlashTestAddr + 3] = 8'h44;
     end
   end
-`else
-  // No flash model under Verilator — wire GPIO inputs straight through
-  assign gpio_in = gpio_in_vip;
-`endif
 
   ////////////
   //  DUT   //
@@ -192,7 +179,6 @@ module tb_croc_soc #(
     .gpio_out_en_o ( gpio_out_en )
   );
 
-`ifndef VERILATOR
   /////////////////////
   //  SPI XiP Test   //
   /////////////////////
@@ -250,7 +236,6 @@ module tb_croc_soc #(
     i_vip.jtag_read_reg32(SpiXipFlashBase + 4, rd_data, 20);
     $display("@%t | [SPI] Word+4 = 0x%08h", $time, rd_data);
   endtask
-`endif // ifndef VERILATOR
 
   /////////////////
   //  Testbench  //
@@ -268,14 +253,12 @@ module tb_croc_soc #(
     i_vip.jtag_init();
 
     // -----------------------------------------------------------------------
-    // Optional: SPI XiP flash test (vsim only; skipped under Verilator)
+    // Optional: SPI XiP flash test
     // -----------------------------------------------------------------------
-`ifndef VERILATOR
     if (run_flash_test) begin
       spi_xip_test();
       repeat(20) @(posedge sys_clk);
     end
-`endif
 
     // -----------------------------------------------------------------------
     // Standard binary-load and run test

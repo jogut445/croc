@@ -35,7 +35,7 @@ Options:
     --flist             Regenerate flist (croc.f)
     --build             Build croc_soc Verilator binary
     --run BINARY        Run binary in Verilator
-    --flash HEX         Load HEX file into SPI flash memory (optional, implies --flash-test)
+    --flash HEX         Load HEX file into SPI flash memory
     --flash-test        Run SPI XiP flash test after loading (uses built-in pattern if no --flash)
 
 Example:
@@ -169,7 +169,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --flash)
             FLASH_HEX=$2
-            FLASH_TEST=1
             shift 2
             ;;
         --flash-test)
