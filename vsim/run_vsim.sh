@@ -45,10 +45,18 @@ Options:
     --build-netlist     Compile Croc post-synthesis netlist in VSIM
     --run BINARY        Run binary in VSIM
     --run-gui BINARY    Prepare running binary in VSIM, open GUI
+    --flash HEX         Load HEX file into SPI flash memory (implies --flash-test)
+    --flash-test        Run SPI XiP flash test with built-in test pattern
 
 Example:
     # Build and run RTL simulation with given binary (CLI mode)
     ./run_vsim.sh --build --run ../sw/bin/helloworld.hex
+
+    # Run with custom flash content (core-driven SPI test)
+    ./run_vsim.sh --run ../sw/bin/test/test_spi_flash.hex --flash ../sw/test/spi_hello.hex
+
+    # Run TB-driven SPI XiP test with built-in pattern
+    ./run_vsim.sh --run ../sw/bin/helloworld.hex --flash-test
 
 EOF
     exit 0
@@ -162,8 +170,12 @@ compile_netlist() {
 
 
 run_vsim() {
+    local binary=$1
+    local extra_args=""
+    [ -n "$FLASH_HEX" ]   && extra_args="$extra_args +flash=$FLASH_HEX"
+    [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
     run_cmd "${VSIM} \
-        +binary=$1 \
+        +binary=$binary $extra_args \
         -c \
         tb_croc_soc \
         -t 1ns \
@@ -175,8 +187,12 @@ run_vsim() {
 
 
 run_vsim_gui() {
+    local binary=$1
+    local extra_args=""
+    [ -n "$FLASH_HEX" ]   && extra_args="$extra_args +flash=$FLASH_HEX"
+    [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
     run_cmd "${VSIM} \
-        +binary=$1 \
+        +binary=$binary $extra_args \
         -gui \
         tb_croc_soc \
         -t 1ns \
@@ -192,6 +208,13 @@ run_vsim_gui() {
 ####################
 
 DRYRUN=0
+FLASH_HEX=""
+FLASH_TEST=0
+RUN_BINARY=""
+RUN_GUI_BINARY=""
+DO_BUILD=0
+DO_BUILD_NETLIST=0
+DO_FLIST=0
 
 # default action if no argument is given
 if [ $# -eq 0 ]; then
@@ -205,7 +228,7 @@ for arg in "$@"; do
     [[ "$arg" == -n || "$arg" == --dry-run ]] && DRYRUN=1
 done
 
-# parse arguments
+# parse arguments — collect all flags before executing
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --help|-h)
@@ -217,27 +240,34 @@ while [[ $# -gt 0 ]]; do
         --dry-run|-n)
             shift
             ;;
-        # script-specific commands
         --flist)
-            generate_rtl_flist
-            generate_netlist_flist
+            DO_FLIST=1
             shift
             ;;
         --build)
-            compile_rtl
+            DO_BUILD=1
             shift
             ;;
         --build-netlist)
-            compile_netlist
+            DO_BUILD_NETLIST=1
             shift
             ;;
         --run)
-            run_vsim $2
+            RUN_BINARY=$2
             shift 2
             ;;
         --run-gui)
-            run_vsim_gui $2
+            RUN_GUI_BINARY=$2
             shift 2
+            ;;
+        --flash)
+            FLASH_HEX=$2
+            FLASH_TEST=1
+            shift 2
+            ;;
+        --flash-test)
+            FLASH_TEST=1
+            shift
             ;;
         # Error handling
         *)
@@ -246,3 +276,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# execute in logical order: flist → build → run
+[ "$DO_FLIST"        = 1 ] && { generate_rtl_flist; generate_netlist_flist; }
+[ "$DO_BUILD"        = 1 ] && compile_rtl
+[ "$DO_BUILD_NETLIST"= 1 ] && compile_netlist
+[ -n "$RUN_BINARY"       ] && run_vsim     "$RUN_BINARY"
+[ -n "$RUN_GUI_BINARY"   ] && run_vsim_gui "$RUN_GUI_BINARY"

@@ -91,6 +91,11 @@ module tb_croc_soc #(
   /////////////////////
   //  SPI Flash VIP  //
   /////////////////////
+  // Not supported under Verilator: the sst26wf080b model uses named-disable
+  // and defparam constructs that Verilator cannot compile.
+  // Under vsim the full model is instantiated; under Verilator gpio_in is
+  // wired directly from the VIP (SPI XiP tests are skipped automatically).
+`ifndef VERILATOR
   // The SST26WF080B QSPI flash model is connected to configurable GPIO pins.
   // SCK and CSN are always driven as outputs by the SoC when SPI is enabled.
   // SIO[3:0] are bidirectional: the SoC drives them during command/address
@@ -154,6 +159,10 @@ module tb_croc_soc #(
       i_spi_flash.I0.memory[FlashTestAddr + 3] = 8'h44;
     end
   end
+`else
+  // No flash model under Verilator — wire GPIO inputs straight through
+  assign gpio_in = gpio_in_vip;
+`endif
 
   ////////////
   //  DUT   //
@@ -183,6 +192,7 @@ module tb_croc_soc #(
     .gpio_out_en_o ( gpio_out_en )
   );
 
+`ifndef VERILATOR
   /////////////////////
   //  SPI XiP Test   //
   /////////////////////
@@ -240,6 +250,7 @@ module tb_croc_soc #(
     i_vip.jtag_read_reg32(SpiXipFlashBase + 4, rd_data, 20);
     $display("@%t | [SPI] Word+4 = 0x%08h", $time, rd_data);
   endtask
+`endif // ifndef VERILATOR
 
   /////////////////
   //  Testbench  //
@@ -257,12 +268,14 @@ module tb_croc_soc #(
     i_vip.jtag_init();
 
     // -----------------------------------------------------------------------
-    // Optional: SPI XiP flash test (enable with +flash_test on sim command)
+    // Optional: SPI XiP flash test (vsim only; skipped under Verilator)
     // -----------------------------------------------------------------------
+`ifndef VERILATOR
     if (run_flash_test) begin
       spi_xip_test();
       repeat(20) @(posedge sys_clk);
     end
+`endif
 
     // -----------------------------------------------------------------------
     // Standard binary-load and run test

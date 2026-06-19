@@ -1,0 +1,8 @@
+// Flash content for spi_hello test.
+// Loaded with $readmemh into the sst26wf080b byte-wide memory array.
+// Byte address 0x002000 maps to OBI address (UserBaseAddr + 0x2000).
+//
+// "Hello World from SPI Flash!\n\0"
+@002000
+48 65 6c 6c 6f 20 57 6f 72 6c 64 20 66 72 6f 6d
+20 53 50 49 20 46 6c 61 73 68 21 0a 00

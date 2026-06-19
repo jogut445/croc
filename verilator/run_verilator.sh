@@ -35,10 +35,18 @@ Options:
     --flist             Regenerate flist (croc.f)
     --build             Build croc_soc Verilator binary
     --run BINARY        Run binary in Verilator
+    --flash HEX         Load HEX file into SPI flash memory (optional, implies --flash-test)
+    --flash-test        Run SPI XiP flash test after loading (uses built-in pattern if no --flash)
 
 Example:
     # Build and run RTL simulation with given binary
     ./run_verilator.sh --build --run ../sw/bin/helloworld.hex
+
+    # Run with SPI flash content loaded from a hex file
+    ./run_verilator.sh --run ../sw/bin/helloworld.hex --flash my_flash.hex
+
+    # Run the SPI flash test with the built-in test pattern (no hex file needed)
+    ./run_verilator.sh --run ../sw/bin/helloworld.hex --flash-test
 
 EOF
     exit 0
@@ -64,6 +72,9 @@ build_verilator() {
         -Wno-WIDTHTRUNC \
         -Wno-WIDTHCONCAT \
         -Wno-ASCRANGE \
+        -Wno-TIMESCALEMOD \
+        -Wno-SPECIFYIGN \
+        -Wno-RISEFALLDLY \
         --binary \
         -j 0 \
         --timing \
@@ -100,8 +111,12 @@ generate_flist() {
 }
 
 run_binary() {
-    run_cmd "echo [INFO][Verilator] Running $1"
-    run_cmd "obj_dir/Vtb_croc_soc +binary="$1" | tee ${PROJ_NAME}.log"
+    local binary=$1
+    local extra_args=""
+    [ -n "$FLASH_HEX" ]  && extra_args="$extra_args +flash=$FLASH_HEX"
+    [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
+    run_cmd "echo [INFO][Verilator] Running $binary"
+    run_cmd "obj_dir/Vtb_croc_soc +binary=\"$binary\" $extra_args | tee ${PROJ_NAME}.log"
 }
 
 
@@ -110,6 +125,11 @@ run_binary() {
 ####################
 
 DRYRUN=0
+FLASH_HEX=""
+FLASH_TEST=0
+RUN_BINARY=""
+DO_BUILD=0
+DO_FLIST=0
 
 # default action if no argument is given
 if [ $# -eq 0 ]; then
@@ -123,7 +143,7 @@ for arg in "$@"; do
     [[ "$arg" == -n || "$arg" == --dry-run ]] && DRYRUN=1
 done
 
-# parse arguments
+# parse arguments — collect all flags before executing
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --help|-h)
@@ -135,18 +155,26 @@ while [[ $# -gt 0 ]]; do
         --dry-run|-n)
             shift
             ;;
-        # script-specific commands
         --flist)
-            generate_flist
+            DO_FLIST=1
             shift
             ;;
         --build)
-            build_verilator
+            DO_BUILD=1
             shift
             ;;
         --run)
-            run_binary $2
+            RUN_BINARY=$2
             shift 2
+            ;;
+        --flash)
+            FLASH_HEX=$2
+            FLASH_TEST=1
+            shift 2
+            ;;
+        --flash-test)
+            FLASH_TEST=1
+            shift
             ;;
         # Error handling
         *)
@@ -155,3 +183,8 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# execute in logical order: flist → build → run
+[ "$DO_FLIST"  = 1 ] && generate_flist
+[ "$DO_BUILD"  = 1 ] && build_verilator
+[ -n "$RUN_BINARY" ] && run_binary "$RUN_BINARY"

@@ -176,7 +176,11 @@
 ../rtl/clint/clint.sv
 ../rtl/obi_timer/obi_timer.sv
 ../rtl/croc_domain.sv
+../EF_QSPI_XIP_CTRL/hdl/rtl/DMC.v
+../EF_QSPI_XIP_CTRL/hdl/rtl/EF_QSPI_XIP_CTRL.v
+../EF_QSPI_XIP_CTRL/hdl/rtl/bus_wrappers/EF_QSPI_XIP_CTRL_AHBL.v
 ../rtl/user_domain/user_rom.sv
+../rtl/user_domain/spi_qspi_obi_wrap.sv
 ../rtl/user_domain.sv
 ../rtl/croc_soc.sv
 ../rtl/croc_chip.sv
