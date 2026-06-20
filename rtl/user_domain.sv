@@ -131,7 +131,14 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
     .GpioCount    ( GpioCount ),
     .NUM_LINES    ( 16        ),
     .LINE_SIZE    ( 32        ),
-    .RESET_CYCLES ( 999       )
+    .RESET_CYCLES ( 999       ),
+    // GPIO pin assignments matching tb_croc_pkg.sv SpiPin* constants
+    .SckPin       ( 0         ),
+    .CsnPin       ( 1         ),
+    .Io0Pin       ( 2         ),
+    .Io1Pin       ( 3         ),
+    .Io2Pin       ( 4         ),
+    .Io3Pin       ( 5         )
   ) i_spi_qspi (
     .clk_i,
     .rst_ni,

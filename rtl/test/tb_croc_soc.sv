@@ -182,24 +182,13 @@ module tb_croc_soc #(
   /////////////////////
   //  SPI XiP Test   //
   /////////////////////
-  // Configures the SPI pin-mux registers via JTAG system-bus accesses, then
-  // reads the first word from the XiP flash window and checks it against the
-  // expected value.  A long sbbusy poll loop is used because the first access
-  // triggers the flash software-reset sequence (~1000 clock cycles) followed
-  // by a cache-line fetch (~156 cycles at LINE_SIZE=32).
+  // GPIO pins for SPI are fixed at compile time (spi_qspi_obi_wrap parameters);
+  // no config register writes are needed.  Reads the first word from the XiP
+  // flash window and checks it against the expected value.  A long sbbusy poll
+  // loop is used because the first access triggers the flash software-reset
+  // sequence (~1000 clock cycles) followed by a cache-line fetch (~156 cycles).
   task automatic spi_xip_test;
     automatic logic [31:0] rd_data;
-
-    $display("@%t | [SPI] Configuring GPIO pin mux for SPI", $time);
-    i_vip.jtag_write_reg32(SpiCfgSckPin, SpiPinSck);
-    i_vip.jtag_write_reg32(SpiCfgCsnPin, SpiPinCsn);
-    i_vip.jtag_write_reg32(SpiCfgIo0Pin, SpiPinIo0);
-    i_vip.jtag_write_reg32(SpiCfgIo1Pin, SpiPinIo1);
-    i_vip.jtag_write_reg32(SpiCfgIo2Pin, SpiPinIo2);
-    i_vip.jtag_write_reg32(SpiCfgIo3Pin, SpiPinIo3);
-
-    $display("@%t | [SPI] Enabling SPI GPIO override (CFG_CTRL[0]=1)", $time);
-    i_vip.jtag_write_reg32(SpiCfgCtrl, 32'h1);
 
     $display("@%t | [SPI] Reading first XiP word (triggers flash reset + cache fill)...", $time);
     begin : xip_read

@@ -35,21 +35,13 @@ package tb_croc_pkg;
 
   // -------------------------------------------------------------------------
   // SPI QSPI XiP controller (spi_qspi_obi_wrap in user_domain)
-  // Base = UserBaseAddr + 0x1000, config regs at addr[13:12]==2'b01
+  // No config registers — GPIO pins are fixed at compile time (spi_qspi_obi_wrap parameters).
+  // The entire UserDesign window (UserBaseAddr+0x1000 onward) maps directly to XiP reads.
+  // Flash byte address = HADDR[23:0] = OBI_addr[23:0].
   // -------------------------------------------------------------------------
-  localparam bit [31:0] SpiXipBase      = croc_pkg::UserBaseAddr + 32'h0000_1000;
-  localparam bit [31:0] SpiCfgSckPin    = SpiXipBase + 32'h00; // [PIN_W-1:0] GPIO pin for SCK
-  localparam bit [31:0] SpiCfgCsnPin    = SpiXipBase + 32'h04; // [PIN_W-1:0] GPIO pin for CSN
-  localparam bit [31:0] SpiCfgIo0Pin    = SpiXipBase + 32'h08; // [PIN_W-1:0] GPIO pin for SPI IO[0]
-  localparam bit [31:0] SpiCfgIo1Pin    = SpiXipBase + 32'h0C; // [PIN_W-1:0] GPIO pin for SPI IO[1]
-  localparam bit [31:0] SpiCfgIo2Pin    = SpiXipBase + 32'h10; // [PIN_W-1:0] GPIO pin for SPI IO[2]
-  localparam bit [31:0] SpiCfgIo3Pin    = SpiXipBase + 32'h14; // [PIN_W-1:0] GPIO pin for SPI IO[3]
-  localparam bit [31:0] SpiCfgCtrl      = SpiXipBase + 32'h18; // [0] = 1 enables SPI GPIO override
 
-  // First XiP-accessible word: addr[13:12]==2'b10 → offset 0x2000 within user window
-  // Flash byte address = OBI_addr[23:0], so flash offset 0x002000 is at OBI 0x2002_0000? No:
-  // UserBaseAddr=0x2000_0000, XiP starts at 0x2000_2000 (UserBaseAddr+0x2000).
-  // Flash byte address = HADDR[23:0] = 0x00_2000 for first XiP word.
+  // OBI addr 0x2000_2000 → HADDR[23:0]=0x002000 → flash byte 0x002000
+  // Test pattern is loaded at flash byte 0x002000 (FlashTestAddr in testbench).
   localparam bit [31:0] SpiXipFlashBase = croc_pkg::UserBaseAddr + 32'h0000_2000;
 
   // Default GPIO pin assignments for SPI (change to match your board layout)
