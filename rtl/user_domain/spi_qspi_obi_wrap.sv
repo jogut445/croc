@@ -155,7 +155,7 @@ module spi_qspi_obi_wrap
             state_d = CFG_RESP;
           end else begin
             ahbl_hsel   = 1'b1;
-            ahbl_haddr  = obi_req_i.a.addr;
+            ahbl_haddr  = obi_req_i.a.addr - (UserBaseAddr + 32'h0000_2000);
             ahbl_htrans = 2'b10; // NONSEQ
             ahbl_hwrite = 1'b0;
             state_d     = XIP_FETCH;

@@ -31,8 +31,8 @@ MEMORY
 {
     /* XiP execution window (VMA) */
     FLASH   (rx)  : ORIGIN = 0x20002000, LENGTH = 512K
-    /* Matching flash byte addresses (LMA) — used by objcopy for @addr output */
-    FLASHLD       : ORIGIN = 0x00002000, LENGTH = 512K
+    /* Flash byte addresses (LMA) — OBI 0x2000_2000 maps to flash byte 0x0 */
+    FLASHLD       : ORIGIN = 0x00000000, LENGTH = 16M
     /* On-chip SRAM for writable data, BSS, and stack */
     SRAM    (rw)  : ORIGIN = 0x10000000, LENGTH = 4K
 }
