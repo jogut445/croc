@@ -64,4 +64,11 @@ package tb_croc_pkg;
   localparam int unsigned SpiPinIo2 = 4; // WP   / quad D2
   localparam int unsigned SpiPinIo3 = 5; // HOLD / quad D3
 
+  // Hardware boot-mode pin (GPIO[8], permanently input-only pad in croc_chip).
+  // Drive high before reset to make the bootrom skip WFI and jump directly to
+  // flash XiP base (0x2000_2000).  Pull-down (or leave undriven) for normal
+  // JTAG boot.  Automatically asserted by the testbench when +flash=<file> is
+  // supplied without +binary=<file>.
+  localparam int unsigned BootSelPin = 8;
+
 endpackage

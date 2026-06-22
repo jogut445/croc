@@ -37,6 +37,7 @@ Options:
     --run BINARY        Run binary in Verilator
     --flash HEX         Load HEX file into SPI flash memory
     --flash-test        Run SPI XiP flash test after loading (uses built-in pattern if no --flash)
+    --flash-boot HEX    Boot autonomously from flash HEX (no JTAG binary load)
 
 Example:
     # Build and run RTL simulation with given binary
@@ -47,6 +48,9 @@ Example:
 
     # Run the SPI flash test with the built-in test pattern (no hex file needed)
     ./run_verilator.sh --run ../sw/bin/helloworld.hex --flash-test
+
+    # Boot directly from flash (no JTAG, GPIO[8] driven high at reset)
+    ./run_verilator.sh --flash-boot ../sw/bin/flash_helloworld.hex
 
 EOF
     exit 0
@@ -120,6 +124,15 @@ run_binary() {
 }
 
 
+# Flash-boot mode: no +binary plusarg so the testbench sees flash_boot_mode=1.
+# GPIO[8] is driven high from t=0; the bootrom jumps directly to 0x2000_2000.
+run_binary_flash_boot() {
+    local flash_hex=$1
+    run_cmd "echo [INFO][Verilator] Flash-boot from $flash_hex"
+    run_cmd "obj_dir/Vtb_croc_soc +flash=\"$flash_hex\" | tee ${PROJ_NAME}.log"
+}
+
+
 ####################
 # Parse Arguments
 ####################
@@ -128,6 +141,7 @@ DRYRUN=0
 FLASH_HEX=""
 FLASH_TEST=0
 RUN_BINARY=""
+FLASH_BOOT_HEX=""
 DO_BUILD=0
 DO_FLIST=0
 
@@ -175,6 +189,10 @@ while [[ $# -gt 0 ]]; do
             FLASH_TEST=1
             shift
             ;;
+        --flash-boot)
+            FLASH_BOOT_HEX=$2
+            shift 2
+            ;;
         # Error handling
         *)
             echo "[ERROR] Unknown option: $1 (use --help for usage)" >&2
@@ -184,6 +202,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 # execute in logical order: flist → build → run
-[ "$DO_FLIST"  = 1 ] && generate_flist
-[ "$DO_BUILD"  = 1 ] && build_verilator
-[ -n "$RUN_BINARY" ] && run_binary "$RUN_BINARY"
+[ "$DO_FLIST"       = 1 ] && generate_flist
+[ "$DO_BUILD"       = 1 ] && build_verilator
+[ -n "$RUN_BINARY"      ] && run_binary           "$RUN_BINARY"
+[ -n "$FLASH_BOOT_HEX" ] && run_binary_flash_boot "$FLASH_BOOT_HEX"
+true  # ensure script exits 0 when all requested steps succeeded

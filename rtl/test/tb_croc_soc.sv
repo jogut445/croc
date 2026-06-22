@@ -42,11 +42,15 @@ module tb_croc_soc #(
   string binary_path;
   string flash_hex_path;
   bit    run_flash_test;
+  bit    explicit_binary;  // set when +binary= is given on the command line
+  bit    flash_boot_mode;  // flash given + no explicit binary → autonomous flash boot
 
   initial begin
     if ($value$plusargs("binary=%s", binary_path)) begin
+      explicit_binary = 1'b1;
       $display("Running program: %s", binary_path);
     end else begin
+      explicit_binary = 1'b0;
       $display("No binary path provided. Running helloworld.");
       binary_path = "../sw/bin/helloworld.hex";
     end
@@ -54,6 +58,14 @@ module tb_croc_soc #(
     if (run_flash_test) $display("SPI flash XiP test enabled.");
     if (!$value$plusargs("flash=%s", flash_hex_path))
       flash_hex_path = "";
+
+    // Autonomous flash-boot mode: flash image given but no SRAM binary.
+    // GPIO[BootSelPin] is driven high from t=0 so boot_mode_q captures 1
+    // at reset deassertion; the bootrom then jumps directly to 0x2000_2000.
+    flash_boot_mode = (flash_hex_path != "") && !explicit_binary;
+    if (flash_boot_mode)
+      $display("Flash boot mode: GPIO[%0d] asserted, JTAG binary load skipped.",
+               BootSelPin);
   end
 
   ////////////
@@ -113,10 +125,11 @@ module tb_croc_soc #(
 
   always_comb begin
     gpio_in = gpio_in_vip;
-    gpio_in[SpiPinIo0] = i_flash.io0_oe ? i_flash.io0_dout : 1'b0;
-    gpio_in[SpiPinIo1] = i_flash.io1_oe ? i_flash.io1_dout : 1'b0;
-    gpio_in[SpiPinIo2] = i_flash.io2_oe ? i_flash.io2_dout : 1'b0;
-    gpio_in[SpiPinIo3] = i_flash.io3_oe ? i_flash.io3_dout : 1'b0;
+    gpio_in[SpiPinIo0]  = i_flash.io0_oe ? i_flash.io0_dout : 1'b0;
+    gpio_in[SpiPinIo1]  = i_flash.io1_oe ? i_flash.io1_dout : 1'b0;
+    gpio_in[SpiPinIo2]  = i_flash.io2_oe ? i_flash.io2_dout : 1'b0;
+    gpio_in[SpiPinIo3]  = i_flash.io3_oe ? i_flash.io3_dout : 1'b0;
+    gpio_in[BootSelPin] = flash_boot_mode; // asserted from t=0 for autonomous flash boot
   end
 `else
   wire [3:0] flash_sio;
@@ -133,10 +146,11 @@ module tb_croc_soc #(
 
   always_comb begin
     gpio_in = gpio_in_vip;
-    gpio_in[SpiPinIo0] = (flash_sio[0] === 1'bz) ? 1'b0 : flash_sio[0];
-    gpio_in[SpiPinIo1] = (flash_sio[1] === 1'bz) ? 1'b0 : flash_sio[1];
-    gpio_in[SpiPinIo2] = (flash_sio[2] === 1'bz) ? 1'b0 : flash_sio[2];
-    gpio_in[SpiPinIo3] = (flash_sio[3] === 1'bz) ? 1'b0 : flash_sio[3];
+    gpio_in[SpiPinIo0]  = (flash_sio[0] === 1'bz) ? 1'b0 : flash_sio[0];
+    gpio_in[SpiPinIo1]  = (flash_sio[1] === 1'bz) ? 1'b0 : flash_sio[1];
+    gpio_in[SpiPinIo2]  = (flash_sio[2] === 1'bz) ? 1'b0 : flash_sio[2];
+    gpio_in[SpiPinIo3]  = (flash_sio[3] === 1'bz) ? 1'b0 : flash_sio[3];
+    gpio_in[BootSelPin] = flash_boot_mode; // asserted from t=0 for autonomous flash boot
   end
 `endif
 
@@ -262,36 +276,50 @@ module tb_croc_soc #(
     // init jtag
     i_vip.jtag_init();
 
-    // -----------------------------------------------------------------------
-    // Optional: SPI XiP flash test
-    // -----------------------------------------------------------------------
-    if (run_flash_test) begin
-      spi_xip_test();
-      repeat(20) @(posedge sys_clk);
+    if (flash_boot_mode) begin
+      // -------------------------------------------------------------------
+      // Flash-boot mode
+      // GPIO[BootSelPin] has been high from t=0; boot_mode_q was captured
+      // as 1 at reset, so the bootrom already jumped to 0x2000_2000.
+      // The flash program runs autonomously: it must write a non-zero value
+      // to CORESTATUS (soc_ctrl offset 0x08) to signal completion, exactly
+      // as a regular SRAM program does via _eoc.
+      // -------------------------------------------------------------------
+      $display("@%t | [CORE] Flash boot: chip running autonomously from 0x2000_2000", $time);
+      $display("@%t | [CORE] Waiting for flash program to write CORESTATUS...", $time);
+      i_vip.jtag_wait_for_eoc(tb_data);
+
+    end else begin
+      // -------------------------------------------------------------------
+      // Standard JTAG boot (unchanged)
+      // -------------------------------------------------------------------
+
+      // Optional: SPI XiP read test via JTAG SBA (CPU stays in WFI)
+      if (run_flash_test) begin
+        spi_xip_test();
+        repeat(20) @(posedge sys_clk);
+      end
+
+      // write test value to sram
+      i_vip.jtag_write_reg32(SramBaseAddr, 32'h1234_5678, 1'b1);
+
+      // load binary to sram
+      i_vip.jtag_load_hex(binary_path);
+
+      // wake core from WFI by writing to CLINT msip
+      $display("@%t | [CORE] Waking core via CLINT msip", $time);
+      i_vip.jtag_write_reg32(ClintBaseAddr, 32'h1);
+
+      // halt core
+      i_vip.jtag_halt();
+
+      // resume core
+      i_vip.jtag_resume();
+
+      // wait for non-zero return value (written into core status register)
+      $display("@%t | [CORE] Wait for end of code...", $time);
+      i_vip.jtag_wait_for_eoc(tb_data);
     end
-
-    // -----------------------------------------------------------------------
-    // Standard binary-load and run test
-    // -----------------------------------------------------------------------
-    // write test value to sram
-    i_vip.jtag_write_reg32(SramBaseAddr, 32'h1234_5678, 1'b1);
-
-    // load binary to sram
-    i_vip.jtag_load_hex(binary_path);
-
-    // wake core from WFI by writing to CLINT msip
-    $display("@%t | [CORE] Waking core via CLINT msip", $time);
-    i_vip.jtag_write_reg32(ClintBaseAddr, 32'h1);
-
-    // halt core
-    i_vip.jtag_halt();
-
-    // resume core
-    i_vip.jtag_resume();
-
-    // wait for non-zero return value (written into core status register)
-    $display("@%t | [CORE] Wait for end of code...", $time);
-    i_vip.jtag_wait_for_eoc(tb_data);
 
     // finish simulation
     repeat(50) @(posedge sys_clk);

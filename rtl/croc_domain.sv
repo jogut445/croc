@@ -27,6 +27,10 @@ module croc_domain import croc_pkg::*; #(
   output logic [GpioCount-1:0] gpio_o,        // Output to GPIO pins
   output logic [GpioCount-1:0] gpio_out_en_o, // Output enable signal; 0 -> input, 1 -> output
 
+  // Sampled at reset: when high, bootrom skips WFI and boots from flash (0x2000_2000).
+  // Connected to GPIO[8] in croc_soc; that pad is permanently input-only in croc_chip.
+  input  logic                 boot_sel_i,
+
   output logic [GpioCount-1:0] gpio_in_sync_o, // synchronized GPIO inputs
 
   /// User OBI interface
@@ -564,6 +568,7 @@ module croc_domain import croc_pkg::*; #(
     .rst_ni,
     .obi_req_i  ( soc_ctrl_obi_req ),
     .obi_rsp_o  ( soc_ctrl_obi_rsp ),
+    .boot_sel_i ( boot_sel_i       ),
     .fetch_en_o ( fetch_enable     ),
     .sram_dly_o ( sram_impl        )
   );

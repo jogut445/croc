@@ -83,6 +83,8 @@ croc_domain #(
   .gpio_o        ( croc_gpio_o     ),
   .gpio_out_en_o ( croc_gpio_oen_o ),
 
+  .boot_sel_i    ( gpio_i[8]       ),
+
   .gpio_in_sync_o ( gpio_in_sync ),
 
   .user_sbr_obi_req_o  ( user_sbr_obi_req ),
