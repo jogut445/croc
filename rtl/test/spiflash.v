@@ -15,6 +15,12 @@
  *  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  *  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
+ *  MODIFICATIONS (croc SoC integration):
+ *  - Added `ifndef VERILATOR guards around the inout tristate assigns
+ *    (assign #1 io* = io*_oe ? io*_dout : 1'bz) which Verilator does not
+ *    support inside non-top modules. The testbench reads io*_oe/io*_dout
+ *    directly via hierarchical references in the Verilator path.
+ *
  */
 
 `timescale 1 ns / 1 ps
@@ -86,10 +92,12 @@ module spiflash (
 	reg io2_dout = 0;
 	reg io3_dout = 0;
 
+`ifndef VERILATOR
 	assign #1 io0 = io0_oe ? io0_dout : 1'bz;
 	assign #1 io1 = io1_oe ? io1_dout : 1'bz;
 	assign #1 io2 = io2_oe ? io2_dout : 1'bz;
 	assign #1 io3 = io3_oe ? io3_dout : 1'bz;
+`endif
 
 	wire io0_delayed;
 	wire io1_delayed;

@@ -1,0 +1,9 @@
+// XiP payload for test_xip.c
+// Loaded with $readmemh into the flash byte-wide memory array.
+// Byte address 0x002000 maps to OBI address (UserBaseAddr + 0x2000 = SPI_XIP_BASE_ADDR).
+//
+// int xip_add(int a, int b) at 0x20002000:
+//   add  a0, a0, a1   -> 33 05 b5 00   (a0 = a0 + a1)
+//   ret               -> 67 80 00 00
+@002000
+33 05 b5 00 67 80 00 00

@@ -194,13 +194,14 @@ run_vsim_gui() {
     [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
     run_cmd "${VSIM} \
         +binary=$binary $extra_args \
-        -voptargs="+acc=npr -suppress 7063" \
+        -voptargs=\"+acc -suppress 7063\" \
         -gui \
         tb_croc_soc \
         -t 1ns \
         -suppress vsim-3009 \
         -suppress vsim-8683 \
-        -suppress vsim-8386"
+        -suppress vsim-8386 \
+        -do \"view structure; view wave; view objects; view transcript; log -r /*; run -all\""
 }
 
 

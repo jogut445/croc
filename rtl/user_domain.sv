@@ -132,7 +132,8 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
     .NUM_LINES    ( 16        ),
     .LINE_SIZE    ( 32        ),
     .RESET_CYCLES ( 999       ),
-    // GPIO pin assignments matching tb_croc_pkg.sv SpiPin* constants
+    .DIN_DELAY    ( 1         ),
+    // Reset-value defaults for the config registers (software can override at runtime)
     .SckPin       ( 0         ),
     .CsnPin       ( 1         ),
     .Io0Pin       ( 2         ),

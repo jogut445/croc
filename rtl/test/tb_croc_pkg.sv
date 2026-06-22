@@ -35,16 +35,28 @@ package tb_croc_pkg;
 
   // -------------------------------------------------------------------------
   // SPI QSPI XiP controller (spi_qspi_obi_wrap in user_domain)
-  // No config registers — GPIO pins are fixed at compile time (spi_qspi_obi_wrap parameters).
-  // The entire UserDesign window (UserBaseAddr+0x1000 onward) maps directly to XiP reads.
-  // Flash byte address = HADDR[23:0] = OBI_addr[23:0].
+  //
+  // Address layout within the UserDesign window (UserBaseAddr+0x1000):
+  //   UserBaseAddr+0x1000 .. +0x1FFF  — SPI config registers (addr[13]=0)
+  //   UserBaseAddr+0x2000 ..          — XiP flash reads      (addr[13]=1)
+  //
+  // Config register offsets from SpiCfgBase:
+  //   0x00 SckPin, 0x04 CsnPin, 0x08 Io0Pin, 0x0C Io1Pin, 0x10 Io2Pin, 0x14 Io3Pin
   // -------------------------------------------------------------------------
+
+  localparam bit [31:0] SpiCfgBase   = croc_pkg::UserBaseAddr + 32'h0000_1000;
+  localparam bit [31:0] SpiCfgSckPin = SpiCfgBase + 32'h00;
+  localparam bit [31:0] SpiCfgCsnPin = SpiCfgBase + 32'h04;
+  localparam bit [31:0] SpiCfgIo0Pin = SpiCfgBase + 32'h08;
+  localparam bit [31:0] SpiCfgIo1Pin = SpiCfgBase + 32'h0C;
+  localparam bit [31:0] SpiCfgIo2Pin = SpiCfgBase + 32'h10;
+  localparam bit [31:0] SpiCfgIo3Pin = SpiCfgBase + 32'h14;
 
   // OBI addr 0x2000_2000 → HADDR[23:0]=0x002000 → flash byte 0x002000
   // Test pattern is loaded at flash byte 0x002000 (FlashTestAddr in testbench).
   localparam bit [31:0] SpiXipFlashBase = croc_pkg::UserBaseAddr + 32'h0000_2000;
 
-  // Default GPIO pin assignments for SPI (change to match your board layout)
+  // GPIO pin assignments for the SPI flash model (match spi_qspi_obi_wrap reset defaults)
   localparam int unsigned SpiPinSck = 0;
   localparam int unsigned SpiPinCsn = 1;
   localparam int unsigned SpiPinIo0 = 2; // MOSI / quad D0

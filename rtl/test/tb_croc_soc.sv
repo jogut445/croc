@@ -91,68 +91,84 @@ module tb_croc_soc #(
   /////////////////////
   //  SPI Flash Model //
   /////////////////////
-  // Uses spiflash (PicoRV32 / greyhound model) with real inout tristate wires,
-  // identical to greyhound_soc_tb.sv.  The SoC drives flash_io[i] when its
-  // gpio_out_en=1; the flash model drives via its internal io_oe (#1 delay).
-  // Tristate resolution in vsim picks whichever side is actively driving.
-  // gpio_in[SpiPinIo_i] is driven directly from the flash_io wire; it then
-  // passes through the croc GPIO 2-FF synchronizer before reaching din in
-  // spi_qspi_obi_wrap — the synchronizer latency (2 sys_clk = 1 SCK cycle)
-  // aligns exactly with the FLASH_READER_QSPI capture timing.
+  // VERILATOR: PicoSoC spiflash model (separate io0-io3 wires)
+  // vsim:      EF SST26WF080B model  (SIO[3:0] bus)
+  // Both accept +flash=<file.hex> to preload a firmware image.
 
   wire flash_sck = gpio_out[SpiPinSck];
-  // CSN: SoC drives low during a transaction, otherwise high (deselected)
   wire flash_csn = gpio_out_en[SpiPinCsn] ? gpio_out[SpiPinCsn] : 1'b1;
 
-  // Bidirectional SIO lines — SoC drives when gpio_out_en=1, tristate otherwise
-  wire flash_io0 = gpio_out_en[SpiPinIo0] ? gpio_out[SpiPinIo0] : 1'bz;
-  wire flash_io1 = gpio_out_en[SpiPinIo1] ? gpio_out[SpiPinIo1] : 1'bz;
-  wire flash_io2 = gpio_out_en[SpiPinIo2] ? gpio_out[SpiPinIo2] : 1'bz;
-  wire flash_io3 = gpio_out_en[SpiPinIo3] ? gpio_out[SpiPinIo3] : 1'bz;
-
+`ifdef VERILATOR
+  // Under VERILATOR the spiflash.v tristate assigns are suppressed, so io*
+  // ports are pure inputs.  Drive them from the SoC and read the flash
+  // output via the model's internal io*_oe / io*_dout signals directly.
   spiflash i_flash (
-    .csb ( flash_csn ),
-    .clk ( flash_sck ),
-    .io0 ( flash_io0 ),
-    .io1 ( flash_io1 ),
-    .io2 ( flash_io2 ),
-    .io3 ( flash_io3 )
+    .csb ( flash_csn            ),
+    .clk ( flash_sck            ),
+    .io0 ( gpio_out[SpiPinIo0] ),
+    .io1 ( gpio_out[SpiPinIo1] ),
+    .io2 ( gpio_out[SpiPinIo2] ),
+    .io3 ( gpio_out[SpiPinIo3] )
   );
 
-  // Feed flash_io wires back into the SoC GPIO inputs.
-  // When neither side drives (Z), hold 0 to suppress X propagation through
-  // the synchronizer during phases when din is not being sampled.
   always_comb begin
     gpio_in = gpio_in_vip;
-    gpio_in[SpiPinIo0] = (flash_io0 === 1'bz) ? 1'b0 : flash_io0;
-    gpio_in[SpiPinIo1] = (flash_io1 === 1'bz) ? 1'b0 : flash_io1;
-    gpio_in[SpiPinIo2] = (flash_io2 === 1'bz) ? 1'b0 : flash_io2;
-    gpio_in[SpiPinIo3] = (flash_io3 === 1'bz) ? 1'b0 : flash_io3;
+    gpio_in[SpiPinIo0] = i_flash.io0_oe ? i_flash.io0_dout : 1'b0;
+    gpio_in[SpiPinIo1] = i_flash.io1_oe ? i_flash.io1_dout : 1'b0;
+    gpio_in[SpiPinIo2] = i_flash.io2_oe ? i_flash.io2_dout : 1'b0;
+    gpio_in[SpiPinIo3] = i_flash.io3_oe ? i_flash.io3_dout : 1'b0;
   end
+`else
+  wire [3:0] flash_sio;
+  assign flash_sio[0] = gpio_out_en[SpiPinIo0] ? gpio_out[SpiPinIo0] : 1'bz;
+  assign flash_sio[1] = gpio_out_en[SpiPinIo1] ? gpio_out[SpiPinIo1] : 1'bz;
+  assign flash_sio[2] = gpio_out_en[SpiPinIo2] ? gpio_out[SpiPinIo2] : 1'bz;
+  assign flash_sio[3] = gpio_out_en[SpiPinIo3] ? gpio_out[SpiPinIo3] : 1'bz;
+
+  sst26wf080b i_flash (
+    .SCK ( flash_sck  ),
+    .SIO ( flash_sio  ),
+    .CEb ( flash_csn  )
+  );
+
+  always_comb begin
+    gpio_in = gpio_in_vip;
+    gpio_in[SpiPinIo0] = (flash_sio[0] === 1'bz) ? 1'b0 : flash_sio[0];
+    gpio_in[SpiPinIo1] = (flash_sio[1] === 1'bz) ? 1'b0 : flash_sio[1];
+    gpio_in[SpiPinIo2] = (flash_sio[2] === 1'bz) ? 1'b0 : flash_sio[2];
+    gpio_in[SpiPinIo3] = (flash_sio[3] === 1'bz) ? 1'b0 : flash_sio[3];
+  end
+`endif
 
   // Flash memory initialisation.
-  // spiflash starts with memory[*] = 0xFF (erased state).
   // If +flash=<file.hex> is given, load the whole image from that file.
-  // Otherwise write a recognisable test pattern at flash byte 0x002000,
-  // which maps to OBI address SpiXipFlashBase (UserBaseAddr + 0x2000).
-  //
-  // Expected word at SpiXipFlashBase:
-  //   {flash[0x2003], flash[0x2002], flash[0x2001], flash[0x2000]}
-  //   = {8'h44, 8'h33, 8'h22, 8'h11} = 32'h4433_2211
+  // Otherwise write a recognisable test pattern at flash byte 0x002000
+  // (maps to OBI address SpiXipFlashBase = UserBaseAddr + 0x2000).
   localparam bit [31:0] FlashTestWord = 32'h4433_2211;
-  localparam bit [23:0] FlashTestAddr = 24'h002000; // matches SpiXipFlashBase[23:0]
+  localparam bit [23:0] FlashTestAddr = 24'h002000;
 
   initial begin
-    #2; // wait for spiflash's own initial block to finish
+    #2;
     if (flash_hex_path != "") begin
       $display("@%t | [FLASH] Loading %s into flash memory", $time, flash_hex_path);
+`ifdef VERILATOR
       $readmemh(flash_hex_path, i_flash.memory);
+`else
+      $readmemh(flash_hex_path, i_flash.I0.memory);
+`endif
     end else begin
       $display("@%t | [FLASH] Writing test pattern at flash byte 0x%06h", $time, FlashTestAddr);
+`ifdef VERILATOR
       i_flash.memory[FlashTestAddr + 0] = 8'h11;
       i_flash.memory[FlashTestAddr + 1] = 8'h22;
       i_flash.memory[FlashTestAddr + 2] = 8'h33;
       i_flash.memory[FlashTestAddr + 3] = 8'h44;
+`else
+      i_flash.I0.memory[FlashTestAddr + 0] = 8'h11;
+      i_flash.I0.memory[FlashTestAddr + 1] = 8'h22;
+      i_flash.I0.memory[FlashTestAddr + 2] = 8'h33;
+      i_flash.I0.memory[FlashTestAddr + 3] = 8'h44;
+`endif
     end
   end
 
