@@ -7,12 +7,12 @@
 #include "config.h"
 
 // SPI config register offsets from SPI_CFG_BASE_ADDR
-#define SPI_CFG_SCK_PIN  (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x00))
-#define SPI_CFG_CSN_PIN  (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x04))
-#define SPI_CFG_IO0_PIN  (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x08))
-#define SPI_CFG_IO1_PIN  (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x0C))
-#define SPI_CFG_IO2_PIN  (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x10))
-#define SPI_CFG_IO3_PIN  (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x14))
+#define SPI_CFG_SCK_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x00))
+#define SPI_CFG_CSN_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x04))
+#define SPI_CFG_IO0_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x08))
+#define SPI_CFG_IO1_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x0C))
+#define SPI_CFG_IO2_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x10))
+#define SPI_CFG_IO3_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x14))
 
 int main(void) {
     uart_init();

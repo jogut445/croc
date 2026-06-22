@@ -33,9 +33,9 @@ int main(void) {
 
     xip_add_t xip_add = (xip_add_t)SPI_XIP_BASE_ADDR;
 
-    check(3,   4,   xip_add(3,   4));
-    check(10,  32,  xip_add(10,  32));
-    check(100, 23,  xip_add(100, 23));
+    check(3, 4, xip_add(3, 4));
+    check(10, 32, xip_add(10, 32));
+    check(100, 23, xip_add(100, 23));
 
     uart_write_flush();
     return 0;
