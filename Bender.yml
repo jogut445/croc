@@ -46,8 +46,14 @@ sources:
       - rtl/gpio/gpio.sv
       - rtl/clint/clint.sv
       - rtl/obi_timer/obi_timer.sv
+      # QSPI XiP flash controller + direct-mapped cache (Apache-2.0, Efabless Corp.)
+      - rtl/user_domain/ef_qspi_xip_ctrl/EF_QSPI_XIP_CTRL.v
+      - rtl/user_domain/ef_qspi_xip_ctrl/DMC.v
+      - rtl/user_domain/ef_qspi_xip_ctrl/EF_QSPI_XIP_CTRL_AHBL.v
       # Level 2
       - rtl/croc_domain.sv
+      - rtl/user_domain/user_rom.sv
+      - rtl/user_domain/spi_qspi_obi_wrap.sv
       - rtl/user_domain.sv
       # add your design files with modules here
       # Level 3
@@ -67,6 +73,7 @@ sources:
     files:
       - rtl/test/tb_croc_pkg.sv
       - rtl/test/croc_vip.sv
+      - rtl/test/spiflash.v
       - rtl/test/tb_croc_soc.sv
 
   - target: genesys2

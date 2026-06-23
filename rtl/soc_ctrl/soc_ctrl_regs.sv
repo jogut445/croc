@@ -16,6 +16,9 @@ module soc_ctrl_regs #(
   input  logic             rst_ni,
   input  obi_req_t         obi_req_i,
   output obi_rsp_t         obi_rsp_o,
+  // Sampled at reset: sets initial value of boot_mode_q (GPIO[8] pad in croc_chip).
+  // When high, bootrom skips WFI and jumps directly to flash (0x2000_2000).
+  input  logic             boot_sel_i,
   // To hardware
   output logic             fetch_en_o,
   output logic             sram_dly_o
@@ -60,11 +63,20 @@ module soc_ctrl_regs #(
   logic          boot_mode_d,   boot_mode_q;
   logic           sram_dly_d,    sram_dly_q;
 
+  // boot_sel_i is sampled on the first rising clock edge after reset using a
+  // standard DFF pair — avoids $_ALDFFE_PNP_ (async-load FF) which is not in
+  // the IHP sg13g2 / sg13cmos5l standard-cell library.
+  // boot_sel_captured_q: 0 in reset, 1 from the first cycle onward.
+  // boot_mode_d mux (in write_fsm): if not yet captured → sample boot_sel_i,
+  // otherwise hold / allow OBI writes.
+  logic boot_sel_captured_q;
+  `FF(boot_sel_captured_q, 1'b1,            '0, clk_i, rst_ni)
+
   `FF(boot_addr_q, boot_addr_d, BootAddrDefault, clk_i, rst_ni)
   `FF(fetch_en_q, fetch_en_d,              1'b1, clk_i, rst_ni)
   `FF(core_status_q, core_status_d,          '0, clk_i, rst_ni)
-  `FF(boot_mode_q, boot_mode_d,              '0, clk_i, rst_ni)
-  `FF(sram_dly_q, sram_dly_d,                '0, clk_i, rst_ni)
+  `FF(boot_mode_q, boot_mode_d,             '0, clk_i, rst_ni)
+  `FF(sram_dly_q, sram_dly_d,               '0, clk_i, rst_ni)
 
   // OBI handling, A-phase fields needed in the R-phase
   logic                               req_q;
@@ -91,7 +103,8 @@ module soc_ctrl_regs #(
     boot_addr_d   = boot_addr_q;
     fetch_en_d    = fetch_en_q;
     core_status_d = core_status_q;
-    boot_mode_d   = boot_mode_q;
+    // First cycle after reset: capture boot_sel_i; thereafter hold current value.
+    boot_mode_d   = boot_sel_captured_q ? boot_mode_q : boot_sel_i;
     sram_dly_d    = sram_dly_q;
 
     if (obi_req_i.req && obi_req_i.a.we) begin

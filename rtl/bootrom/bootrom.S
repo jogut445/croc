@@ -9,13 +9,19 @@
 # Located at 0x0200_0000
 #
 # Boot flow:
-# 1. Enable MSIE, WFI (wait until woken by JTAG via msip)
+# 0. Read soc_ctrl BOOTMODE (offset 0x0c from 0x0300_0000).
+#    If non-zero (GPIO[8] was high at reset) → jump to _flash_boot.
+#    GPIO[8] pad is permanently input-only in croc_chip; external pull-down
+#    selects JTAG mode by default. Pull GPIO[8] high before reset to boot flash.
+# 1. (JTAG path) Enable MSIE, WFI (wait until woken by JTAG via msip)
 # 2. Wake: clear msip, disable interrupts
 # 3. Clear registers x1, x3-x15 (x2/SP set by SRAM stub)
 # 4. Set mtvec to bootrom trap handler
 # 5. Read boot address from soc_ctrl, jump there with jalr zero
 #    (ra is set to &_eoc so main() returning goes to _eoc)
 # 6. _eoc: pack return value, write CORESTATUS, WFI
+# (Flash path) _flash_boot: jump directly to XiP flash base (0x2000_2000).
+#    Flash payload is responsible for setting sp before calling C code.
 #
 # Trap handling:
 # The bootrom trap handler saves/restores caller-saved registers and dispatches
@@ -25,17 +31,21 @@
 # - 0x1000_0008: .word croc_interrupt_handler (function pointer)
 #
 # Fixed section offsets (from base 0x0200_0000):
-# 0x000  _start                 (WFI trampoline + boot)
+# 0x000  _start                 (boot-mode check + JTAG WFI trampoline)
+# 0x070  _flash_boot            (direct jump to XiP flash)
 # 0x100  _eoc                   (end of computation)
 # 0x200  _trap_handler_wrapper  (trap entry, save regs, dispatch)
 # 0x300  _trap_exit             (restore regs, mret)
 
 # -----------------------------------------------------------------------------
-# WFI Trampoline (entry point after reset)
+# Boot-mode check + WFI Trampoline (entry point after reset)
 # -----------------------------------------------------------------------------
 .section .text
 .globl _start
 _start:
+  lui     t0, 0x03000  # t0 = SOC_CTRL base (0x0300_0000)
+  lw      t0, 12(t0)   # t0 = BOOTMODE register (offset 0x0c)
+  bnez    t0, _flash_boot  # GPIO[8] was high at reset → boot from flash
   csrwi   mie, 8       # Enable M-mode software interrupt
   wfi                  # Sleep until interrupt
   lui     t0, 0x02040  # t0 = CLINT base (0x0204_0000)
@@ -70,13 +80,24 @@ _start:
   csrw    mtvec, t0
 
 # -----------------------------------------------------------------------------
-# Boot software
+# Boot software (JTAG path)
 # Read address from soc_ctrl register and jump
 # -----------------------------------------------------------------------------
   lui     t0, 0x03000  # t0 = SOC_CTRL base (0x0300_0000)
   lw      t0, 0(t0)    # t0 = boot address (BOOTADDR register)
   la      ra, _eoc     # ra = &_eoc (return address for main)
+                       # Note: auipc+addi offsets are 432 and 156 (not 444/168)
+                       # because 3 words were prepended to _start.
   jalr    zero, 0(t0)  # Jump to boot address (rd=zero, ra preserved)
+
+# -----------------------------------------------------------------------------
+# Flash boot path
+# Jumped to from _start when BOOTMODE != 0 (GPIO[8] high at reset).
+# Flash payload at 0x2000_2000 must set sp before calling C code.
+# -----------------------------------------------------------------------------
+_flash_boot:
+  lui     t0, 0x20002  # t0 = XiP flash base (0x2000_2000)
+  jalr    zero, 0(t0)  # Jump into flash
 
 # -----------------------------------------------------------------------------
 # End of Computation (_eoc)

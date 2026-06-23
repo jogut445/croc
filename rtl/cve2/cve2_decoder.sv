@@ -15,10 +15,11 @@
 `include "common_cells/assertions.svh"
 
 module cve2_decoder #(
-  parameter bit RV32E               = 0,
-  parameter cve2_pkg::rv32m_e RV32M = cve2_pkg::RV32MFast,
-  parameter cve2_pkg::rv32b_e RV32B = cve2_pkg::RV32BNone,
-  parameter bit               XInterface    = 1'b0
+  parameter bit                   RV32E    = 0,
+  parameter cve2_pkg::rv32m_e     RV32M    = cve2_pkg::RV32MFast,
+  parameter cve2_pkg::rv32b_e     RV32B    = cve2_pkg::RV32BNone,
+  parameter cve2_pkg::rv32simd_e  RV32SIMD = cve2_pkg::RV32SIMDNone,
+  parameter bit                   XInterface = 1'b0
 ) (
   input  logic                 clk_i,
   input  logic                 rst_ni,
@@ -556,6 +557,42 @@ module cve2_decoder #(
             end
           endcase
         end
+      end
+
+      /////////////////////
+      // SIMD32-IBEX     //
+      /////////////////////
+
+      OPCODE_CUSTOM0: begin  // packed SIMD (custom-0 = 0x0b), R-type
+        rf_ren_a_o = 1'b1;
+        rf_ren_b_o = 1'b1;
+        rf_we      = 1'b1;
+        unique case ({instr[31:25], instr[14:12]})
+          // padd: 8-bit / 16-bit
+          {7'b000_0000, 3'b000}, {7'b000_0000, 3'b001},
+          // psub: 8-bit / 16-bit
+          {7'b000_0001, 3'b000}, {7'b000_0001, 3'b001},
+          // padd.acc: horizontal 8-bit / 16-bit (rs2 unused)
+          {7'b000_1000, 3'b000}, {7'b000_1000, 3'b001},
+          // pperm16: swap halfwords (rs2 unused); pperm8 removed — use RV32B xperm.b
+          {7'b000_1001, 3'b001},
+          // popcount: per-lane 8/16 (rs2 unused); 32-bit uses RV32B CPOP
+          {7'b000_1010, 3'b000}, {7'b000_1010, 3'b001},
+          // pmul: 8-bit / 16-bit
+          {7'b001_0000, 3'b000}, {7'b001_0000, 3'b001},
+          // psll: shift left 8-bit / 16-bit
+          {7'b001_1000, 3'b000}, {7'b001_1000, 3'b001},
+          // psrl: shift right 8-bit / 16-bit
+          {7'b001_1001, 3'b000}, {7'b001_1001, 3'b001},
+          // prol: rotate left 8-bit / 16-bit; 32-bit uses RV32B ROL
+          {7'b001_1010, 3'b000}, {7'b001_1010, 3'b001},
+          // padd_sat: 8-bit / 16-bit / 32-bit
+          {7'b010_0000, 3'b000}, {7'b010_0000, 3'b001}, {7'b010_0000, 3'b010},
+          // psub_sat: 8-bit / 16-bit / 32-bit
+          {7'b010_0001, 3'b000}, {7'b010_0001, 3'b001}, {7'b010_0001, 3'b010}:
+            illegal_insn = (RV32SIMD == RV32SIMDNone) ? 1'b1 : 1'b0;
+          default: illegal_insn = 1'b1;
+        endcase
       end
 
       /////////////
@@ -1139,6 +1176,50 @@ module cve2_decoder #(
           end
           default: ;
         endcase
+      end
+
+      OPCODE_CUSTOM0: begin  // SIMD32-IBEX: R-type, rs1 op rs2 -> rd
+        alu_op_a_mux_sel_o = OP_A_REG_A;
+        alu_op_b_mux_sel_o = OP_B_REG_B;
+        if (RV32SIMD != RV32SIMDNone) begin
+          unique case ({instr_alu[31:25], instr_alu[14:12]})
+            // padd: 8-bit / 16-bit
+            {7'b000_0000, 3'b000}: alu_operator_o = ALU_PADD8;
+            {7'b000_0000, 3'b001}: alu_operator_o = ALU_PADD16;
+            // psub: 8-bit / 16-bit
+            {7'b000_0001, 3'b000}: alu_operator_o = ALU_PSUB8;
+            {7'b000_0001, 3'b001}: alu_operator_o = ALU_PSUB16;
+            // padd.acc: horizontal sum (rs2 unused)
+            {7'b000_1000, 3'b000}: alu_operator_o = ALU_PADD8_ACC;
+            {7'b000_1000, 3'b001}: alu_operator_o = ALU_PADD16_ACC;
+            // pperm16: swap halfwords (rs2 unused); pperm8 → use xperm.b
+            {7'b000_1001, 3'b001}: alu_operator_o = ALU_PPERM16;
+            // popcount: count set bits per lane (rs2 unused); funct3=2 is RV32B CPOP
+            {7'b000_1010, 3'b000}: alu_operator_o = ALU_POPCOUNT8;
+            {7'b000_1010, 3'b001}: alu_operator_o = ALU_POPCOUNT16;
+            // pmul: 8-bit / 16-bit
+            {7'b001_0000, 3'b000}: alu_operator_o = ALU_PMUL8;
+            {7'b001_0000, 3'b001}: alu_operator_o = ALU_PMUL16;
+            // psll: lane-wise logical shift left
+            {7'b001_1000, 3'b000}: alu_operator_o = ALU_PSLL8;
+            {7'b001_1000, 3'b001}: alu_operator_o = ALU_PSLL16;
+            // psrl: lane-wise logical shift right
+            {7'b001_1001, 3'b000}: alu_operator_o = ALU_PSRL8;
+            {7'b001_1001, 3'b001}: alu_operator_o = ALU_PSRL16;
+            // prol: lane-wise rotate left; funct3=2 is RV32B ROL
+            {7'b001_1010, 3'b000}: alu_operator_o = ALU_PROL8;
+            {7'b001_1010, 3'b001}: alu_operator_o = ALU_PROL16;
+            // padd_sat: 8-bit / 16-bit / 32-bit
+            {7'b010_0000, 3'b000}: alu_operator_o = ALU_PADD_SAT8;
+            {7'b010_0000, 3'b001}: alu_operator_o = ALU_PADD_SAT16;
+            {7'b010_0000, 3'b010}: alu_operator_o = ALU_PADD_SAT32;
+            // psub_sat: 8-bit / 16-bit / 32-bit
+            {7'b010_0001, 3'b000}: alu_operator_o = ALU_PSUB_SAT8;
+            {7'b010_0001, 3'b001}: alu_operator_o = ALU_PSUB_SAT16;
+            {7'b010_0001, 3'b010}: alu_operator_o = ALU_PSUB_SAT32;
+            default: ;
+          endcase
+        end
       end
 
       OPCODE_SYSTEM: begin

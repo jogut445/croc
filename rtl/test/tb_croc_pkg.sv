@@ -33,4 +33,42 @@ package tb_croc_pkg;
   // CLINT base address (msip register is at offset 0)
   localparam bit [31:0] ClintBaseAddr   = croc_pkg::get_periph_start_addr(croc_pkg::PeriphClint);
 
+  // -------------------------------------------------------------------------
+  // SPI QSPI XiP controller (spi_qspi_obi_wrap in user_domain)
+  //
+  // Address layout within the UserDesign window (UserBaseAddr+0x1000):
+  //   UserBaseAddr+0x1000 .. +0x1FFF  — SPI config registers (addr[13]=0)
+  //   UserBaseAddr+0x2000 ..          — XiP flash reads      (addr[13]=1)
+  //
+  // Config register offsets from SpiCfgBase:
+  //   0x00 SckPin, 0x04 CsnPin, 0x08 Io0Pin, 0x0C Io1Pin, 0x10 Io2Pin, 0x14 Io3Pin
+  // -------------------------------------------------------------------------
+
+  localparam bit [31:0] SpiCfgBase   = croc_pkg::UserBaseAddr + 32'h0000_1000;
+  localparam bit [31:0] SpiCfgSckPin = SpiCfgBase + 32'h00;
+  localparam bit [31:0] SpiCfgCsnPin = SpiCfgBase + 32'h04;
+  localparam bit [31:0] SpiCfgIo0Pin = SpiCfgBase + 32'h08;
+  localparam bit [31:0] SpiCfgIo1Pin = SpiCfgBase + 32'h0C;
+  localparam bit [31:0] SpiCfgIo2Pin = SpiCfgBase + 32'h10;
+  localparam bit [31:0] SpiCfgIo3Pin = SpiCfgBase + 32'h14;
+
+  // OBI addr 0x2000_2000 → HADDR[23:0]=0x002000 → flash byte 0x002000
+  // Test pattern is loaded at flash byte 0x002000 (FlashTestAddr in testbench).
+  localparam bit [31:0] SpiXipFlashBase = croc_pkg::UserBaseAddr + 32'h0000_2000;
+
+  // GPIO pin assignments for the SPI flash model (match spi_qspi_obi_wrap reset defaults)
+  localparam int unsigned SpiPinSck = 0;
+  localparam int unsigned SpiPinCsn = 1;
+  localparam int unsigned SpiPinIo0 = 2; // MOSI / quad D0
+  localparam int unsigned SpiPinIo1 = 3; // MISO / quad D1
+  localparam int unsigned SpiPinIo2 = 4; // WP   / quad D2
+  localparam int unsigned SpiPinIo3 = 5; // HOLD / quad D3
+
+  // Hardware boot-mode pin (GPIO[8], permanently input-only pad in croc_chip).
+  // Drive high before reset to make the bootrom skip WFI and jump directly to
+  // flash XiP base (0x2000_2000).  Pull-down (or leave undriven) for normal
+  // JTAG boot.  Automatically asserted by the testbench when +flash=<file> is
+  // supplied without +binary=<file>.
+  localparam int unsigned BootSelPin = 8;
+
 endpackage

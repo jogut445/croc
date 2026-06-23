@@ -18,6 +18,12 @@ The SoC is composed of two main parts:
 - The `croc_domain` containing a CVE2 core (a more minimal fork of Ibex), SRAM, an OBI crossbar and a few simple peripherals
 - The `user_domain` where students are invited to add their own designs or other open-source designs (peripherals, accelerators...)
 
+This version extends the base Croc SoC with two additions:
+
+- **XiP SPI Flash controller**: the [EF_QSPI_XIP_CTRL](https://github.com/efabless/EF_QSPI_XIP_CTRL) controller integrated into `user_domain`, mapped at `0x2000_2000`. It allows the CPU to fetch and execute instructions directly from an external SPI flash without copying them to SRAM first (Execute-in-Place). The IP is used unmodified except for a minor timing adjustment required by the multi-stage GPIO input synchronizer. The SPI flash simulation model (`spiflash.v`) is taken from the [greyhound-ihp](https://github.com/mole99/greyhound-ihp) project.
+- **Boot from flash via boot pin**: driving GPIO[8] high at reset causes the bootrom to jump directly to the XiP flash window (`0x2000_2000`) instead of waiting for JTAG, enabling fully autonomous flash-boot.
+- **SIMD co-processor**: a custom instruction extension encoded in the RISC-V custom-0 opcode space, adding packed SIMD arithmetic for 8-bit (4 lanes), 16-bit (2 lanes) and 32-bit (1 lane) data. See the [SIMD Extension](#simd-extension) section for the full instruction listing.
+
 The main interconnect is OBI, you can find [the spec online](https://github.com/openhwgroup/obi/blob/072d9173c1f2d79471d6f2a10eae59ee387d4c6f/OBI-v1.6.0.pdf).
 
 The various IPs of the SoC (UART, OBI, debug-module, timer...) come from other PULP repositories and are managed by [Bender](https://github.com/pulp-platform/bender).
@@ -43,7 +49,10 @@ The SRAMs are instantiated via a technology wrapper called `tc_sram_impl` (tc: t
 
 ## Bootmodes
 
-Currently the only way to boot is via JTAG.
+Two boot modes are supported:
+
+- **JTAG boot** (default): the bootrom waits in WFI until a debugger loads a program via JTAG and releases the core.
+- **Flash boot**: driving GPIO[8] high at reset sets the `BOOTMODE` register in `soc_ctrl` and causes the bootrom to jump directly to `0x2000_2000` (the XiP flash window) with no JTAG involvement. Software must be compiled with `link_flash.ld` and `crt0_flash.S` so it is linked for the correct VMA. In simulation this mode is triggered with the `--flash-boot` option of the run scripts.
 
 ## Memory Map
 
@@ -64,7 +73,9 @@ The address map of the default configuration is as follows:
 | `32'h0300_B000` | `32'h0300_C000` | (optional) DMA configuration               |
 | `32'h1000_0000` | `+SRAM_SIZE`    | Memory banks (SRAM)                        |
 | `32'h2000_0000` | `32'h8000_0000` | Passthrough to user domain                 |
-| `32'h2000_0000` | `32'h2000_1000` | reserved for user ROM text*                |
+| `32'h2000_0000` | `32'h2000_1000` | User ROM text*                             |
+| `32'h2000_1000` | `32'h2000_2000` | SPI/XiP controller config registers        |
+| `32'h2000_2000` | `+FLASH_SIZE`   | XiP SPI flash window (Execute-in-Place)    |
 
 *If people modify Croc we suggest they add a ROM at this address containing additional information
 like the names of the developers, a project link or similar. This can then be written out via UART.  
@@ -109,7 +120,7 @@ icdesign ihp13 -nogui
 
 The setup is guided by the `.cockpitrc` configuration file. If you need different macros or another version of the standard cells you can change it accordingly.
 
-Yyou may prefer to just enter a shell in the pre-installed osic-tools container using:
+You may prefer to just enter a shell in the pre-installed osic-tools container using:
 
 ```sh
 oseda bash
@@ -231,6 +242,92 @@ To save a fix/change as a patch, stage it in git and then run `bender vendor pat
 ### Targets
 
 Another thing we use are targets (in the `Bender.yml`), together they build different views/contexts of your RTL. For example without defining any targets the technology independent cells/memories are used (in `rtl/tech_cells_generic/`) but if we use the target `ihp13` then the same modules contain a technology-specific implementation (in `ihp13/`). Similar contexts are built for different simulators and other things.
+
+## SIMD Extension
+
+The CVE2 core is extended with a packed SIMD extension using the RISC-V **custom-0** opcode (`funct3` selects the lane width, `funct7` selects the operation). All instructions use the standard R-type encoding (`rd`, `rs1`, `rs2`).
+
+### 8-bit SIMD — 4 lanes
+
+| Instruction  | funct7/funct3 | Description                                     |
+|--------------|---------------|-------------------------------------------------|
+| `PADD8`      | `0x00`/`0b000`| Add                                             |
+| `PSUB8`      | `0x01`/`0b000`| Subtract                                        |
+| `PMUL8`      | `0x10`/`0b000`| Multiply                                        |
+| `PADD_SAT8`  | `0x20`/`0b000`| Saturating add                                  |
+| `PSUB_SAT8`  | `0x21`/`0b000`| Saturating subtract                             |
+| `PADD8_ACC`  | `0x08`/`0b000`| Horizontal sum into rd (rs2 unused)             |
+| `POPCOUNT8`  | `0x0a`/`0b000`| Bit count per 8-bit lane (rs2 unused)           |
+| `PSLL8`      | `0x18`/`0b000`| Logical left shift per lane by `rs2[2:0]`       |
+| `PSRL8`      | `0x19`/`0b000`| Logical right shift per lane by `rs2[2:0]`      |
+| `PROL8`      | `0x1a`/`0b000`| Rotate left per lane by `rs2[2:0]`              |
+
+### 16-bit SIMD — 2 lanes
+
+| Instruction  | funct7/funct3 | Description                                     |
+|--------------|---------------|-------------------------------------------------|
+| `PADD16`     | `0x00`/`0b001`| Add                                             |
+| `PSUB16`     | `0x01`/`0b001`| Subtract                                        |
+| `PMUL16`     | `0x10`/`0b001`| Multiply                                        |
+| `PADD_SAT16` | `0x20`/`0b001`| Saturating add                                  |
+| `PSUB_SAT16` | `0x21`/`0b001`| Saturating subtract                             |
+| `PADD16_ACC` | `0x08`/`0b001`| Horizontal sum into rd (rs2 unused)             |
+| `PPERM16`    | `0x09`/`0b001`| Swap halfwords: `rd = {rs1[15:0], rs1[31:16]}`  |
+| `POPCOUNT16` | `0x0a`/`0b001`| Bit count per 16-bit lane (rs2 unused)          |
+| `PSLL16`     | `0x18`/`0b001`| Logical left shift per lane by `rs2[3:0]`       |
+| `PSRL16`     | `0x19`/`0b001`| Logical right shift per lane by `rs2[3:0]`      |
+| `PROL16`     | `0x1a`/`0b001`| Rotate left per lane by `rs2[3:0]`              |
+
+### 32-bit — 1 lane
+
+| Instruction  | funct7/funct3 | Description       |
+|--------------|---------------|-------------------|
+| `PADD_SAT32` | `0x20`/`0b010`| Saturating add    |
+| `PSUB_SAT32` | `0x21`/`0b010`| Saturating subtract |
+
+A C header with inline-assembly wrappers for all instructions is provided in `sw/lib/inc/simd.h`. Test programs are in `sw/test/test_simd*.c`.
+
+## Reference Flow
+
+This project was developed for the VLSI 2 course at ETH Zurich and targets the ETHZ internal custom standard cells (not yet publicly available). All modifications have been ported to a self-contained `reference_flow/` directory derived from the standard Croc reference flow. The setup script and simulation/backend targets described below require access to the ETH internal tools and PDK.
+
+### Setup
+
+Run the setup script once from the root of this repository to populate `reference_flow/`:
+
+```sh
+./setup_reference_flow.sh
+```
+
+### Simulation
+
+Enter the osic-tools container and run all simulations with a single command:
+
+```sh
+oseda bash
+cd reference_flow
+make sim
+```
+
+`make sim` performs five steps in order:
+
+1. Build all software (SRAM and flash hex targets)
+2. Print SoC configuration via Verilator (also compiles the model)
+3. Run all standard tests including helloworld
+4. JTAG boot → XiP flash execution (`test_xip` with `spi_xip_payload.hex`)
+5. Autonomous flash-boot sweep across all flash-linked programs
+
+### Backend flow (ETH systems only)
+
+The backend flow requires the ETHZ internal PDK and is only supported on ETH systems:
+
+```sh
+oseda bash
+cd reference_flow
+make backend
+```
+
+This runs Yosys synthesis → OpenROAD place-and-route → KLayout GDS export
 
 ## License
 

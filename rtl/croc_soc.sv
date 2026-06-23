@@ -50,6 +50,17 @@ localparam int unsigned NumExternalIrqs = 4;
 logic [NumExternalIrqs-1:0] interrupts;
 logic [      GpioCount-1:0] gpio_in_sync;
 
+// Intermediate GPIO wires so user_domain can OR into the output
+logic [GpioCount-1:0] croc_gpio_o;
+logic [GpioCount-1:0] croc_gpio_oen_o;
+logic [GpioCount-1:0] user_gpio_out;
+logic [GpioCount-1:0] user_gpio_oen;
+
+// User domain SPI GPIO outputs are OR'd with the core GPIO peripheral.
+// Software must not configure the same pin in both simultaneously.
+assign gpio_o       = croc_gpio_o   | user_gpio_out;
+assign gpio_out_en_o = croc_gpio_oen_o | user_gpio_oen;
+
 croc_domain #(
   .GpioCount       ( GpioCount       ),
   .NumExternalIrqs ( NumExternalIrqs )
@@ -69,8 +80,10 @@ croc_domain #(
   .uart_tx_o,
 
   .gpio_i,
-  .gpio_o,
-  .gpio_out_en_o,
+  .gpio_o        ( croc_gpio_o     ),
+  .gpio_out_en_o ( croc_gpio_oen_o ),
+
+  .boot_sel_i    ( gpio_i[8]       ),
 
   .gpio_in_sync_o ( gpio_in_sync ),
 
@@ -99,8 +112,10 @@ user_domain #(
   .user_mgr_obi_req_o ( user_mgr_obi_req ),
   .user_mgr_obi_rsp_i ( user_mgr_obi_rsp ),
 
-  .gpio_in_sync_i ( gpio_in_sync ),
-  .interrupts_o   ( interrupts   )
+  .gpio_in_sync_i ( gpio_in_sync  ),
+  .gpio_out_o     ( user_gpio_out ),
+  .gpio_oen_o     ( user_gpio_oen ),
+  .interrupts_o   ( interrupts    )
 );
 
 endmodule

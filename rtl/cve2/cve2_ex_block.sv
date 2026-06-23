@@ -10,8 +10,9 @@
  * Execution block: Hosts ALU and MUL/DIV unit
  */
 module cve2_ex_block #(
-  parameter cve2_pkg::rv32m_e RV32M           = cve2_pkg::RV32MFast,
-  parameter cve2_pkg::rv32b_e RV32B           = cve2_pkg::RV32BNone
+  parameter cve2_pkg::rv32m_e    RV32M    = cve2_pkg::RV32MFast,
+  parameter cve2_pkg::rv32b_e    RV32B    = cve2_pkg::RV32BNone,
+  parameter cve2_pkg::rv32simd_e RV32SIMD = cve2_pkg::RV32SIMDNone
 ) (
   input  logic                  clk_i,
   input  logic                  rst_ni,
@@ -94,7 +95,8 @@ module cve2_ex_block #(
   /////////
 
   cve2_alu #(
-    .RV32B(RV32B)
+    .RV32B   (RV32B),
+    .RV32SIMD(RV32SIMD)
   ) alu_i (
     .operator_i         (alu_operator_i),
     .operand_a_i        (alu_operand_a_i),

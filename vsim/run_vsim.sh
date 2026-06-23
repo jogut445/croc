@@ -21,7 +21,7 @@ set -u  # Error on undefined vars
 # Source environment
 source "../env.sh"
 
-VSIM=${VSIM:-questa-2025.3 vsim}
+VSIM=${VSIM:-vsim}
 
 mkdir -p reports
 
@@ -45,10 +45,22 @@ Options:
     --build-netlist     Compile Croc post-synthesis netlist in VSIM
     --run BINARY        Run binary in VSIM
     --run-gui BINARY    Prepare running binary in VSIM, open GUI
+    --flash HEX         Load HEX file into SPI flash memory
+    --flash-test        Run SPI XiP flash test with built-in test pattern
+    --flash-boot HEX    Boot autonomously from flash HEX (no JTAG binary load)
 
 Example:
     # Build and run RTL simulation with given binary (CLI mode)
     ./run_vsim.sh --build --run ../sw/bin/helloworld.hex
+
+    # Run with custom flash content (core-driven SPI test)
+    ./run_vsim.sh --run ../sw/bin/test/test_spi_flash.hex --flash ../sw/test/spi_hello.hex
+
+    # Run TB-driven SPI XiP test with built-in pattern
+    ./run_vsim.sh --run ../sw/bin/helloworld.hex --flash-test
+
+    # Boot directly from flash (no JTAG, GPIO[8] driven high at reset)
+    ./run_vsim.sh --flash-boot ../sw/bin/flash_helloworld.hex
 
 EOF
     exit 0
@@ -162,28 +174,55 @@ compile_netlist() {
 
 
 run_vsim() {
-    run_cmd "${VSIM} \
-        +binary=$1 \
-        -c \
+    local binary=$1
+    local extra_args=""
+    [ -n "$FLASH_HEX" ]   && extra_args="$extra_args +flash=$FLASH_HEX"
+    [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
+    ${VSIM} -c \
+        +binary="$binary" $extra_args \
+        -voptargs="+acc=npr -suppress 7063" \
         tb_croc_soc \
         -t 1ns \
         -suppress vsim-3009 \
         -suppress vsim-8683 \
         -suppress vsim-8386 \
-        -do \"run -a; quit\""
+        -do "run -a; quit" \
+        | tee reports/sim.log
+}
+
+
+# Flash-boot mode: no +binary plusarg so the testbench sees flash_boot_mode=1.
+# GPIO[8] is driven high from t=0; the bootrom jumps directly to 0x2000_2000.
+run_vsim_flash_boot() {
+    local flash_hex=$1
+    ${VSIM} -c \
+        +flash="$flash_hex" \
+        -voptargs="+acc=npr -suppress 7063" \
+        tb_croc_soc \
+        -t 1ns \
+        -suppress vsim-3009 \
+        -suppress vsim-8683 \
+        -suppress vsim-8386 \
+        -do "run -a; quit" \
+        | tee reports/sim.log
 }
 
 
 run_vsim_gui() {
+    local binary=$1
+    local extra_args=""
+    [ -n "$FLASH_HEX" ]   && extra_args="$extra_args +flash=$FLASH_HEX"
+    [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
     run_cmd "${VSIM} \
-        +binary=$1 \
+        +binary=$binary $extra_args \
+        -voptargs=\"+acc -suppress 7063\" \
         -gui \
         tb_croc_soc \
         -t 1ns \
-        -voptargs=+acc \
         -suppress vsim-3009 \
         -suppress vsim-8683 \
-        -suppress vsim-8386"
+        -suppress vsim-8386 \
+        -do \"view structure; view wave; view objects; view transcript; log -r /*; run -all\""
 }
 
 
@@ -192,6 +231,14 @@ run_vsim_gui() {
 ####################
 
 DRYRUN=0
+FLASH_HEX=""
+FLASH_TEST=0
+RUN_BINARY=""
+RUN_GUI_BINARY=""
+FLASH_BOOT_HEX=""
+DO_BUILD=0
+DO_BUILD_NETLIST=0
+DO_FLIST=0
 
 # default action if no argument is given
 if [ $# -eq 0 ]; then
@@ -205,7 +252,7 @@ for arg in "$@"; do
     [[ "$arg" == -n || "$arg" == --dry-run ]] && DRYRUN=1
 done
 
-# parse arguments
+# parse arguments — collect all flags before executing
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --help|-h)
@@ -217,26 +264,36 @@ while [[ $# -gt 0 ]]; do
         --dry-run|-n)
             shift
             ;;
-        # script-specific commands
         --flist)
-            generate_rtl_flist
-            generate_netlist_flist
+            DO_FLIST=1
             shift
             ;;
         --build)
-            compile_rtl
+            DO_BUILD=1
             shift
             ;;
         --build-netlist)
-            compile_netlist
+            DO_BUILD_NETLIST=1
             shift
             ;;
         --run)
-            run_vsim $2
+            RUN_BINARY=$2
             shift 2
             ;;
         --run-gui)
-            run_vsim_gui $2
+            RUN_GUI_BINARY=$2
+            shift 2
+            ;;
+        --flash)
+            FLASH_HEX=$2
+            shift 2
+            ;;
+        --flash-test)
+            FLASH_TEST=1
+            shift
+            ;;
+        --flash-boot)
+            FLASH_BOOT_HEX=$2
             shift 2
             ;;
         # Error handling
@@ -246,3 +303,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# execute in logical order: flist → build → run
+[ "$DO_FLIST"        = 1 ] && { generate_rtl_flist; generate_netlist_flist; }
+[ "$DO_BUILD"        = 1 ] && compile_rtl
+[ "$DO_BUILD_NETLIST" = 1 ] && compile_netlist
+[ -n "$RUN_BINARY"       ] && run_vsim           "$RUN_BINARY"
+[ -n "$RUN_GUI_BINARY"   ] && run_vsim_gui       "$RUN_GUI_BINARY"
+[ -n "$FLASH_BOOT_HEX"  ] && run_vsim_flash_boot "$FLASH_BOOT_HEX"
+true  # ensure script exits 0 when all requested steps succeeded

@@ -1,3 +1,6 @@
 .bender
 tmp
 *.log
+.vscode
+reference_flow/
+greyhound-ihp/

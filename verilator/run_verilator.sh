@@ -35,10 +35,22 @@ Options:
     --flist             Regenerate flist (croc.f)
     --build             Build croc_soc Verilator binary
     --run BINARY        Run binary in Verilator
+    --flash HEX         Load HEX file into SPI flash memory
+    --flash-test        Run SPI XiP flash test after loading (uses built-in pattern if no --flash)
+    --flash-boot HEX    Boot autonomously from flash HEX (no JTAG binary load)
 
 Example:
     # Build and run RTL simulation with given binary
     ./run_verilator.sh --build --run ../sw/bin/helloworld.hex
+
+    # Run with SPI flash content loaded from a hex file
+    ./run_verilator.sh --run ../sw/bin/helloworld.hex --flash my_flash.hex
+
+    # Run the SPI flash test with the built-in test pattern (no hex file needed)
+    ./run_verilator.sh --run ../sw/bin/helloworld.hex --flash-test
+
+    # Boot directly from flash (no JTAG, GPIO[8] driven high at reset)
+    ./run_verilator.sh --flash-boot ../sw/bin/flash_helloworld.hex
 
 EOF
     exit 0
@@ -64,6 +76,9 @@ build_verilator() {
         -Wno-WIDTHTRUNC \
         -Wno-WIDTHCONCAT \
         -Wno-ASCRANGE \
+        -Wno-TIMESCALEMOD \
+        -Wno-SPECIFYIGN \
+        -Wno-RISEFALLDLY \
         --binary \
         -j 0 \
         --timing \
@@ -100,8 +115,21 @@ generate_flist() {
 }
 
 run_binary() {
-    run_cmd "echo [INFO][Verilator] Running $1"
-    run_cmd "obj_dir/Vtb_croc_soc +binary="$1" | tee ${PROJ_NAME}.log"
+    local binary=$1
+    local extra_args=""
+    [ -n "$FLASH_HEX" ]  && extra_args="$extra_args +flash=$FLASH_HEX"
+    [ "$FLASH_TEST" = 1 ] && extra_args="$extra_args +flash_test"
+    run_cmd "echo [INFO][Verilator] Running $binary"
+    run_cmd "obj_dir/Vtb_croc_soc +binary=\"$binary\" $extra_args | tee ${PROJ_NAME}.log"
+}
+
+
+# Flash-boot mode: no +binary plusarg so the testbench sees flash_boot_mode=1.
+# GPIO[8] is driven high from t=0; the bootrom jumps directly to 0x2000_2000.
+run_binary_flash_boot() {
+    local flash_hex=$1
+    run_cmd "echo [INFO][Verilator] Flash-boot from $flash_hex"
+    run_cmd "obj_dir/Vtb_croc_soc +flash=\"$flash_hex\" | tee ${PROJ_NAME}.log"
 }
 
 
@@ -110,6 +138,12 @@ run_binary() {
 ####################
 
 DRYRUN=0
+FLASH_HEX=""
+FLASH_TEST=0
+RUN_BINARY=""
+FLASH_BOOT_HEX=""
+DO_BUILD=0
+DO_FLIST=0
 
 # default action if no argument is given
 if [ $# -eq 0 ]; then
@@ -123,7 +157,7 @@ for arg in "$@"; do
     [[ "$arg" == -n || "$arg" == --dry-run ]] && DRYRUN=1
 done
 
-# parse arguments
+# parse arguments — collect all flags before executing
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --help|-h)
@@ -135,17 +169,28 @@ while [[ $# -gt 0 ]]; do
         --dry-run|-n)
             shift
             ;;
-        # script-specific commands
         --flist)
-            generate_flist
+            DO_FLIST=1
             shift
             ;;
         --build)
-            build_verilator
+            DO_BUILD=1
             shift
             ;;
         --run)
-            run_binary $2
+            RUN_BINARY=$2
+            shift 2
+            ;;
+        --flash)
+            FLASH_HEX=$2
+            shift 2
+            ;;
+        --flash-test)
+            FLASH_TEST=1
+            shift
+            ;;
+        --flash-boot)
+            FLASH_BOOT_HEX=$2
             shift 2
             ;;
         # Error handling
@@ -155,3 +200,10 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# execute in logical order: flist → build → run
+[ "$DO_FLIST"       = 1 ] && generate_flist
+[ "$DO_BUILD"       = 1 ] && build_verilator
+[ -n "$RUN_BINARY"      ] && run_binary           "$RUN_BINARY"
+[ -n "$FLASH_BOOT_HEX" ] && run_binary_flash_boot "$FLASH_BOOT_HEX"
+true  # ensure script exits 0 when all requested steps succeeded

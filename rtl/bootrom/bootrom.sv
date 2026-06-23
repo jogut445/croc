@@ -34,34 +34,51 @@ module bootrom #(
     // Bootrom divided into blocks per contiguous label
     //-----------------------------------------------------------------------------------
     // Contiguous block starting at 0x02000000: _start
-    localparam int unsigned StartRomWords = 25;
+    //
+    // Boot-mode check prepended (3 words): reads soc_ctrl BOOTMODE register
+    // (offset 0x0c from base 0x03000000). If non-zero, GPIO[8] was high at
+    // reset → skip WFI and jump directly to flash XiP base (0x2000_2000).
+    // Otherwise fall through to the standard JTAG-wait path unchanged.
+    //
+    // Two PC-relative addi immediates are patched vs the original bootrom.S:
+    //   addi t0,t0,444 → addi t0,t0,432  (auipc now at 0x50, not 0x44)
+    //   addi ra,ra,168 → addi ra,ra,156  (auipc now at 0x64, not 0x58)
+    // Both still produce the same absolute target addresses.
+    localparam int unsigned StartRomWords = 30;
     localparam logic [31:0] StartRom [StartRomWords] = '{
-        // <_start>
-        32'h30445073, // 0x02000000: csrwi mie,8
-        32'h10500073, // 0x02000004: wfi
-        32'h020402B7, // 0x02000008: lui t0,0x2040
-        32'h0002A023, // 0x0200000C: sw zero,0(t0) # 2040000 <__global_pointer$+0x3e4d0>
-        32'h30405073, // 0x02000010: csrwi mie,0
-        32'h00000193, // 0x02000014: li gp,0
-        32'h00000213, // 0x02000018: li tp,0
-        32'h00000313, // 0x0200001C: li t1,0
-        32'h00000393, // 0x02000020: li t2,0
-        32'h00000413, // 0x02000024: li s0,0
-        32'h00000493, // 0x02000028: li s1,0
-        32'h00000513, // 0x0200002C: li a0,0
-        32'h00000593, // 0x02000030: li a1,0
-        32'h00000613, // 0x02000034: li a2,0
-        32'h00000693, // 0x02000038: li a3,0
-        32'h00000713, // 0x0200003C: li a4,0
-        32'h00000793, // 0x02000040: li a5,0
-        32'h00000297, // 0x02000044: auipc t0,0x0
-        32'h1BC28293, // 0x02000048: addi t0,t0,444 # 2000200 <_trap_handler_wrapper>
-        32'h30529073, // 0x0200004C: csrw mtvec,t0
-        32'h030002B7, // 0x02000050: lui t0,0x3000
-        32'h0002A283, // 0x02000054: lw t0,0(t0) # 3000000 <__global_pointer$+0xffe4d0>
-        32'h00000097, // 0x02000058: auipc ra,0x0
-        32'h0A808093, // 0x0200005C: addi ra,ra,168 # 2000100 <_eoc>
-        32'h00028067 // 0x02000060: jr t0
+        // <boot-mode check>
+        32'h030002B7, // 0x02000000: lui t0,0x3000        # t0 = soc_ctrl base (0x0300_0000)
+        32'h00C2A283, // 0x02000004: lw  t0,12(t0)        # t0 = BOOTMODE reg  (offset 0x0c)
+        32'h06029463, // 0x02000008: bnez t0,104          # non-zero → _flash_boot (0x02000070)
+        // <_start> JTAG path (original 25 words, shifted +0x0c)
+        32'h30445073, // 0x0200000C: csrwi mie,8
+        32'h10500073, // 0x02000010: wfi
+        32'h020402B7, // 0x02000014: lui t0,0x2040
+        32'h0002A023, // 0x02000018: sw zero,0(t0)
+        32'h30405073, // 0x0200001C: csrwi mie,0
+        32'h00000193, // 0x02000020: li gp,0
+        32'h00000213, // 0x02000024: li tp,0
+        32'h00000313, // 0x02000028: li t1,0
+        32'h00000393, // 0x0200002C: li t2,0
+        32'h00000413, // 0x02000030: li s0,0
+        32'h00000493, // 0x02000034: li s1,0
+        32'h00000513, // 0x02000038: li a0,0
+        32'h00000593, // 0x0200003C: li a1,0
+        32'h00000613, // 0x02000040: li a2,0
+        32'h00000693, // 0x02000044: li a3,0
+        32'h00000713, // 0x02000048: li a4,0
+        32'h00000793, // 0x0200004C: li a5,0
+        32'h00000297, // 0x02000050: auipc t0,0x0
+        32'h1B028293, // 0x02000054: addi t0,t0,432       # → 0x02000200 (_trap_handler_wrapper)
+        32'h30529073, // 0x02000058: csrw mtvec,t0
+        32'h030002B7, // 0x0200005C: lui t0,0x3000
+        32'h0002A283, // 0x02000060: lw t0,0(t0)          # soc_ctrl BOOTADDR
+        32'h00000097, // 0x02000064: auipc ra,0x0
+        32'h09C08093, // 0x02000068: addi ra,ra,156       # → 0x02000100 (_eoc)
+        32'h00028067, // 0x0200006C: jr t0                # jump to JTAG-supplied boot addr
+        // <_flash_boot> (bnez target above)
+        32'h200022B7, // 0x02000070: lui t0,0x20002       # t0 = 0x2000_2000 (XiP flash base)
+        32'h00028067  // 0x02000074: jr  t0               # jump into flash
     };
 
     // Contiguous block starting at 0x02000100: _eoc

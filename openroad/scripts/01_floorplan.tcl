@@ -68,7 +68,7 @@ utl::report "###################################################################
 # hence the OR die area is the final chip size minus the sealring thickness on each side
 
 set chipH    1916; # OR die height (top to bottom)
-set chipW    1916; # OR die width (left to right)
+set chipW    2416; # OR die width (left to right)
 set padD      180; # pad depth (edge to core)
 set padW       80; # pad width (beachfront)
 set padBond    70; # bonding pad size
@@ -93,9 +93,9 @@ source src/padring.tcl
 ##########################################################################
 # RAM sizes
 ##########################################################################
-set RamMaster256x64   [[ord::get_db] findMaster "RM_IHPSG13_1P_256x64_c2_bm_bist"]
-set RamSize256x64_W   [ord::dbu_to_microns [$RamMaster256x64 getWidth]]
-set RamSize256x64_H   [ord::dbu_to_microns [$RamMaster256x64 getHeight]]
+set RamMaster512x64   [[ord::get_db] findMaster "RM_IHPSG13_1P_512x64_c2_bm_bist"]
+set RamSize512x64_W   [ord::dbu_to_microns [$RamMaster512x64 getWidth]]
+set RamSize512x64_H   [ord::dbu_to_microns [$RamMaster512x64 getHeight]]
 
 
 ##########################################################################
@@ -141,8 +141,8 @@ set floor_midpointY   [expr $floor_bottomY + ($floor_topY - $floor_bottomY)/2]
 utl::report "Place Macros"
 
 # Bank0
-set X [expr $floor_midpointX - $RamSize256x64_W/2]
-set Y [expr $floor_topY - $RamSize256x64_H]
+set X [expr $floor_midpointX - $RamSize512x64_W/2]
+set Y [expr $floor_topY - $RamSize512x64_H]
 placeInstance $bank0_sram0 $X $Y R0
 
 # Bank1
