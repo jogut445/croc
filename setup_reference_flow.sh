@@ -348,7 +348,7 @@ insert_before "$DEF2GDS" \
 echo "  def2gds-croc: SRAM GDS 512x32 -> 512x64, oseda prefix, lef_files=''"
 
 ROUTING="$REF/openroad/scripts/04_routing.tcl"
-patch_file "$ROUTING" "-droute_end_iter 20" "-droute_end_iter 30"
+patch_file "$ROUTING" "-droute_end_iter 20" "-droute_end_iter 50"
 echo "  04_routing.tcl: -droute_end_iter 20 -> 30 (more iterations before giving up)"
 
 # ----------------------------------------------------------------

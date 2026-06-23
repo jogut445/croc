@@ -68,19 +68,32 @@ module user_rom #(
     if(req_q2) begin
       if(~we_q2) begin
         case(word_addr)
-          5'h0: rsp_data = 32'h46;
-          5'h1: rsp_data = 32'h72;
-          5'h2: rsp_data = 32'h61;
-          5'h3: rsp_data = 32'h6e;
-          5'h4: rsp_data = 32'h6b;
-          5'h5: rsp_data = 32'h27;
-          5'h6: rsp_data = 32'h73;
-          5'h7: rsp_data = 32'h20;
-          5'h8: rsp_data = 32'h41;
-          5'h9: rsp_data = 32'h53;
-          5'ha: rsp_data = 32'h49;
-          5'hb: rsp_data = 32'h43;
-          5'hc: rsp_data = 32'ha;
+          7'h00: rsp_data = 32'h4A; // 'J'
+          7'h01: rsp_data = 32'h6F; // 'o'
+          7'h02: rsp_data = 32'h6E; // 'n'
+          7'h03: rsp_data = 32'h61; // 'a'
+          7'h04: rsp_data = 32'h73; // 's'
+          7'h05: rsp_data = 32'h20; // ' '
+          7'h06: rsp_data = 32'h26; // '&'
+          7'h07: rsp_data = 32'h20; // ' '
+          7'h08: rsp_data = 32'h4D; // 'M'
+          7'h09: rsp_data = 32'h65; // 'e'
+          7'h0a: rsp_data = 32'h6C; // 'l'
+          7'h0b: rsp_data = 32'h6F; // 'o'
+          7'h0c: rsp_data = 32'h64; // 'd'
+          7'h0d: rsp_data = 32'h69; // 'i'
+          7'h0e: rsp_data = 32'h65; // 'e'
+          7'h0f: rsp_data = 32'h2C; // ','
+          7'h10: rsp_data = 32'h20; // ' '
+          7'h11: rsp_data = 32'h56; // 'V'
+          7'h12: rsp_data = 32'h4C; // 'L'
+          7'h13: rsp_data = 32'h53; // 'S'
+          7'h14: rsp_data = 32'h49; // 'I'
+          7'h15: rsp_data = 32'h20; // ' '
+          7'h16: rsp_data = 32'h32; // '2'
+          7'h17: rsp_data = 32'h0D; // '\r'
+          7'h18: rsp_data = 32'h0A; // '\n'
+          7'h19: rsp_data = 32'h00; // '\0'
           default: rsp_data = 32'h0;
         endcase
       end else begin
