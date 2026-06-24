@@ -140,15 +140,17 @@ set floor_midpointY   [expr $floor_bottomY + ($floor_topY - $floor_bottomY)/2]
 
 utl::report "Place Macros"
 
-# Bank0
-set X [expr $floor_midpointX - $RamSize512x64_W/2]
-set Y [expr $floor_topY - $RamSize512x64_H]
-placeInstance $bank0_sram0 $X $Y R0
+# Both banks side-by-side at the top, pins facing down (R0).
+# This leaves one continuous rectangular cell area below instead of
+# three fragmented strips, keeping the decoder cells compact.
+set sramTopY [expr $floor_topY - $RamSize512x64_H]
 
-# Bank1
-set X [expr $X]
-set Y [expr $floor_bottomY]
-placeInstance $bank1_sram0 $X $Y MX
+# Bank0: top-left
+placeInstance $bank0_sram0 $floor_leftX $sramTopY R0
+
+# Bank1: immediately right of Bank0
+set sramBank1X [expr $floor_leftX + $RamSize512x64_W]
+placeInstance $bank1_sram0 $sramBank1X $sramTopY R0
 
 # defined in init_tech.tcl
 insertTapCells

@@ -83,9 +83,14 @@ set_max_delay 3.0 -from $JTAG_ASYNC_RSP_START -to $JTAG_ASYNC_RSP_END -ignore_cl
 puts "Input/Outputs..."
 
 # Reset should propagate to system domain within a clock cycle.
-set_input_delay -max [ expr $TCK_JTG * 0.10 ] [get_ports {rst_ni testmode_i}]  
+set_input_delay -max [ expr $TCK_JTG * 0.10 ] [get_ports {rst_ni testmode_i}]
 set_false_path -hold   -from [get_ports {rst_ni testmode_i}]
 set_max_delay $TCK_SYS -from [get_ports {rst_ni testmode_i}]
+
+# crash_dump_o is left unconnected in core_wrap (.crash_dump_o()), so the
+# entire logic cone driving these registers is dead.  False-path it so the
+# tool does not waste repair budget on it.
+set_false_path -to [get_cells -hierarchical *crash_dump_o*_reg]
 
 
 ##########

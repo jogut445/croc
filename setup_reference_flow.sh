@@ -264,8 +264,8 @@ echo "  copied openroad/src/padring.tcl  (sg13g2_ioSite -> sg13cmos5l_ioSite)"
 
 # ----------------------------------------------------------------
 # 13. Floorplan — larger chip (2416 um), 512x64 macro (for 1024x32 via
-#    bit-interleaving), SRAM banks split top-center / bottom-center
-#    to open routing channels on both sides instead of a side-by-side wall.
+#    bit-interleaving), both SRAM banks side-by-side at top (R0) to
+#    leave one continuous rectangular cell area below the macros.
 #    Keep reference_flow's floorplan structure; patch only the differences.
 # ----------------------------------------------------------------
 step "13/15" "Patching OpenROAD floorplan + power grid + routing..."
@@ -288,21 +288,25 @@ with open(floorplan) as f:
     content = f.read()
 
 NEW_PLACEMENT = (
-    '# Bank0: top-center, pins facing down (R0)\n'
-    '# Bank1: bottom-center, pins facing up (MX) -- wide routing channels on both sides\n'
-    'set sramCenterX [expr {int($floor_midpointX - $RamSize512x64_W / 2)}]\n'
+    '# Bank0: top-left, pins facing down (R0)\n'
+    '# Bank1: immediately right of Bank0, also top, also R0\n'
+    '# Side-by-side at top — leaves one continuous rectangular cell area below\n'
+    '# instead of three fragmented strips, keeping the decoder cells compact.\n'
+    'set sramTopY     [expr {int($floor_topY - $RamSize512x64_H)}]\n'
+    'set sramBank0X   [expr {int($floor_leftX)}]\n'
+    'set sramBank1X   [expr {int($floor_leftX + $RamSize512x64_W)}]\n'
     '\n'
-    'placeInstance $bank0_sram0 $sramCenterX [expr {int($floor_topY - $RamSize512x64_H)}] R0\n'
-    'placeInstance $bank1_sram0 $sramCenterX [expr {int($floor_bottomY)}] MX\n'
+    'placeInstance $bank0_sram0 $sramBank0X $sramTopY R0\n'
+    'placeInstance $bank1_sram0 $sramBank1X $sramTopY R0\n'
     '\n'
     'utl::report "SRAM macro box: width ${RamSize512x64_W} height ${RamSize512x64_H}"\n'
-    'utl::report "SRAM bank0: center-top  x=$sramCenterX y=[expr {int($floor_topY - $RamSize512x64_H)}] R0"\n'
-    'utl::report "SRAM bank1: center-bot  x=$sramCenterX y=$floor_bottomY MX"\n'
-    'utl::report "SRAM side channels: [expr {$sramCenterX - $core_leftX}] um on each side"'
+    'utl::report "SRAM bank0: top-left  x=$sramBank0X y=$sramTopY R0"\n'
+    'utl::report "SRAM bank1: top-right x=$sramBank1X y=$sramTopY R0"\n'
+    'utl::report "SRAM combined width: [expr {2 * $RamSize512x64_W}] um, cell area height: [expr {$sramTopY - $floor_bottomY}] um"'
 )
 
-if 'Bank0: top-center' in content:
-    print('  floorplan: SRAM placement already top-center/bottom-center, skipping')
+if 'Bank0: top-left' in content:
+    print('  floorplan: SRAM placement already side-by-side at top, skipping')
     sys.exit(0)
 
 old_pattern = re.compile(
@@ -328,7 +332,7 @@ if not m:
     sys.exit(1)
 with open(floorplan, 'w') as f:
     f.write(content[:m.start()] + NEW_PLACEMENT + content[m.end():])
-print('  floorplan: SRAM placement -> top-center (R0) + bottom-center (MX)')
+print('  floorplan: SRAM placement -> both top, side-by-side (R0 + R0)')
 PYEOF
 
 PWRGRID="$REF/openroad/scripts/power_grid.tcl"
@@ -349,7 +353,61 @@ echo "  def2gds-croc: SRAM GDS 512x32 -> 512x64, oseda prefix, lef_files=''"
 
 ROUTING="$REF/openroad/scripts/04_routing.tcl"
 patch_file "$ROUTING" "-droute_end_iter 20" "-droute_end_iter 50"
-echo "  04_routing.tcl: -droute_end_iter 20 -> 30 (more iterations before giving up)"
+echo "  04_routing.tcl: -droute_end_iter 20 -> 50 (more iterations before giving up)"
+patch_file "$ROUTING" "TopMetal1 0.20" "TopMetal1 0.10"
+echo "  04_routing.tcl: TM1 derating 0.20 -> 0.10 (more TM1 resources, shorter routes, less RC)"
+
+# Patch repair_timing: add setup margin + second post-DPL repair pass.
+# The DPL+incremental-GRT cycle that runs after the first repair_timing can
+# degrade slack by ~0.2 ns.  Targeting +0.2 ns on the first pass absorbs that
+# drift; a second pass after re-routing closes anything that slipped through.
+if ! grep -qF "setup_margin" "$ROUTING"; then
+    patch_file "$ROUTING" \
+        "repair_timing -setup -verbose -repair_tns 100" \
+        "repair_timing -setup -setup_margin 0.2 -verbose -repair_tns 100"
+    awk '/report_metrics.*grt_repaired/{
+        print "# Second repair pass: catches anything DPL/incremental-GRT degraded after the"
+        print "# first repair.  Smaller margin here -- just close residual violations."
+        print "utl::report \"Repair setup violations (post-DPL pass)...\""
+        print "repair_timing -setup -setup_margin 0.05 -verbose -repair_tns 100"
+        print "repair_timing -hold -hold_margin 0.1 -verbose -repair_tns 100"
+        print ""
+    }
+    {print}' "$ROUTING" > "$ROUTING.tmp" && mv "$ROUTING.tmp" "$ROUTING"
+fi
+echo "  04_routing.tcl: repair_timing -setup_margin 0.2 + second post-DPL repair pass"
+
+# Patch repair_timing: add hold-recovery setup pass between hold repair and DPL.
+# Hold-repair buffers add delay that can tip marginal setup paths back negative;
+# one extra setup pass immediately after catches those regressions before DPL runs.
+if ! grep -qF "recover hold-repair" "$ROUTING"; then
+    awk 'found==0 && /repair_timing -hold -hold_margin 0.1 -verbose -repair_tns 100/{
+        print
+        print "# Recover setup slack lost to hold-repair delay buffers before DPL runs."
+        print "repair_timing -setup -verbose -repair_tns 100"
+        found=1
+        next
+    }
+    {print}' "$ROUTING" > "$ROUTING.tmp" && mv "$ROUTING.tmp" "$ROUTING"
+fi
+echo "  04_routing.tcl: hold-recovery setup pass added after pre-DPL hold repair"
+
+# Patch SDC: false-path the crash_dump_o logic cone.
+# crash_dump_o is left unconnected in core_wrap (.crash_dump_o()), so Yosys
+# retains dead registers that the timing engine wastes repair budget on.
+SDC="$REF/openroad/src/constraints.sdc"
+if ! grep -qF "crash_dump_o" "$SDC"; then
+    awk '/set_max_delay \$TCK_SYS -from \[get_ports \{rst_ni testmode_i\}\]/{
+        print
+        print ""
+        print "# crash_dump_o is left unconnected in core_wrap (.crash_dump_o()), so the"
+        print "# entire logic cone driving these registers is dead.  False-path it so the"
+        print "# tool does not waste repair budget on it."
+        print "set_false_path -to [get_cells -hierarchical *crash_dump_o*_reg]"
+        next
+    }1' "$SDC" > "$SDC.tmp" && mv "$SDC.tmp" "$SDC"
+fi
+echo "  constraints.sdc: false-path crash_dump_o dead logic (unconnected port)"
 
 # ----------------------------------------------------------------
 # 14. .cockpitrc — select 512x64 macro so icdesign generates the right

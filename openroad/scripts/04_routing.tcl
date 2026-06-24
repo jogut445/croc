@@ -44,7 +44,7 @@ utl::report "# 04-01: Global Route"
 utl::report "###############################################################################"
 
 # Reduce TM1 to avoid too much routing there (bigger tracks -> bad for routing)
-set_global_routing_layer_adjustment TopMetal1 0.20
+set_global_routing_layer_adjustment TopMetal1 0.10
 set_routing_layers -signal Metal2-TopMetal1 -clock Metal2-TopMetal1
 
 utl::report "Global route"
@@ -67,8 +67,11 @@ utl::report "Perform buffer insertion..."
 repair_design -verbose
 
 utl::report "Repair setup and hold violations..."
-repair_timing -setup -verbose -repair_tns 100
+# Target +0.2 ns setup margin so DPL/incremental-GRT slack drift stays positive.
+repair_timing -setup -setup_margin 0.2 -verbose -repair_tns 100
 repair_timing -hold -hold_margin 0.1 -verbose -repair_tns 100
+# Recover setup slack lost to hold-repair delay buffers before DPL runs.
+repair_timing -setup -verbose -repair_tns 100
 
 utl::report "GRT incremental..."
 # Run to get modified net by DPL
@@ -85,6 +88,13 @@ global_route -end_incremental \
             -verbose
 
 estimate_parasitics -global_routing
+
+# Second repair pass: catches anything DPL/incremental-GRT degraded after the
+# first repair.  Smaller margin here — just close residual violations.
+utl::report "Repair setup violations (post-DPL pass)..."
+repair_timing -setup -setup_margin 0.05 -verbose -repair_tns 100
+repair_timing -hold -hold_margin 0.1 -verbose -repair_tns 100
+
 report_metrics "04-01_${proj_name}.grt_repaired"
 save_checkpoint 04-01_${proj_name}.grt_repaired
 report_image "04-01_${proj_name}.grt_repaired" true true false true

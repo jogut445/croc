@@ -105,11 +105,12 @@ module spi_qspi_obi_wrap
   // -------------------------------------------------------------------------
   // OBI state machine
   // -------------------------------------------------------------------------
-  typedef enum logic [1:0] { IDLE, CFG_RESP, XIP_FETCH, XIP_RESP } state_e;
+  typedef enum logic [2:0] { IDLE, CFG_RESP, XIP_ADDR, XIP_FETCH, XIP_RESP } state_e;
 
   state_e      state_q, state_d;
   logic  [7:0] tid_q;
   logic [31:0] rdata_q;
+  logic [31:0] xip_addr_q; // registered HADDR offset, breaks decode→cache-lookup path
 
   // Latched request fields for the config-register path
   logic        cfg_wr_q;
@@ -154,13 +155,17 @@ module spi_qspi_obi_wrap
           if (cfg_sel) begin
             state_d = CFG_RESP;
           end else begin
-            ahbl_hsel   = 1'b1;
-            ahbl_haddr  = obi_req_i.a.addr - (UserBaseAddr + 32'h0000_2000);
-            ahbl_htrans = 2'b10; // NONSEQ
-            ahbl_hwrite = 1'b0;
-            state_d     = XIP_FETCH;
+            state_d = XIP_ADDR; // address latched this cycle; present to IP next cycle
           end
         end
+      end
+
+      XIP_ADDR: begin
+        ahbl_hsel   = 1'b1;
+        ahbl_haddr  = xip_addr_q;
+        ahbl_htrans = 2'b10; // NONSEQ
+        ahbl_hwrite = 1'b0;
+        state_d     = XIP_FETCH;
       end
 
       CFG_RESP: begin
@@ -191,6 +196,7 @@ module spi_qspi_obi_wrap
       state_q     <= IDLE;
       tid_q       <= '0;
       rdata_q     <= '0;
+      xip_addr_q  <= '0;
       cfg_wr_q    <= '0;
       cfg_wdata_q <= '0;
       cfg_reg_q   <= '0;
@@ -204,6 +210,10 @@ module spi_qspi_obi_wrap
           cfg_wr_q    <= obi_req_i.a.we;
           cfg_wdata_q <= obi_req_i.a.wdata;
           cfg_reg_q   <= obi_req_i.a.addr[4:2];
+        end else begin
+          // Register the byte offset into the XIP window; this breaks the long
+          // combinatorial path from instruction-decode → cache lookup.
+          xip_addr_q <= obi_req_i.a.addr - (UserBaseAddr + 32'h0000_2000);
         end
       end
 
