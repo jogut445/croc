@@ -9,7 +9,7 @@
  * ----------
  *   FLASH  VMA  0x2000_2000  where the CPU fetches/executes (via XiP controller)
  *   FLASHLD LMA  0x0000_2000  flash array byte address (@addr used by $readmemh)
- *   SRAM        0x1000_0000  4 KB on-chip SRAM — data, BSS, stack
+ *   SRAM        0x1000_0000  8 KB on-chip SRAM — data, BSS, stack
  *
  * The XiP controller maps OBI address 0x2000_2000 → flash byte 0x002000,
  * so LMA = VMA - 0x2000_0000.  objcopy -O verilog emits LMA addresses,
@@ -30,11 +30,11 @@ ENTRY(_start)
 MEMORY
 {
     /* XiP execution window (VMA) */
-    FLASH   (rx)  : ORIGIN = 0x20002000, LENGTH = 512K
+    FLASH   (rx)  : ORIGIN = 0x20002000, LENGTH = 16M
     /* Flash byte addresses (LMA) — OBI 0x2000_2000 maps to flash byte 0x0 */
     FLASHLD       : ORIGIN = 0x00000000, LENGTH = 16M
     /* On-chip SRAM for writable data, BSS, and stack */
-    SRAM    (rw)  : ORIGIN = 0x10000000, LENGTH = 4K
+    SRAM    (rw)  : ORIGIN = 0x10000000, LENGTH = 8K
 }
 
 PHDRS

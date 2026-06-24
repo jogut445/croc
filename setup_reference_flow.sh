@@ -168,6 +168,8 @@ for f in "$CROC"/sw/test/*.c "$CROC"/sw/test/*.hex; do
     cp "$f" "$REF/sw/test/$(basename "$f")"
     echo "  sw/test/$(basename "$f")"
 done
+cp "$CROC/sw/link.ld"       "$REF/sw/link.ld"
+echo "  sw/link.ld        (SRAM linker script: 8K region at 0x1000_0000)"
 cp "$CROC/sw/link_flash.ld" "$REF/sw/link_flash.ld"
 echo "  sw/link_flash.ld  (XiP flash linker script: VMA=0x2000_2000, LMA=0x0000_2000)"
 cp "$CROC/sw/crt0_flash.S"  "$REF/sw/crt0_flash.S"
