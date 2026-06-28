@@ -95,7 +95,7 @@ echo "  rtl/user_domain.sv"
 # ----------------------------------------------------------------
 step "4/15" "Copying XiP SPI controller..."
 mkdir -p "$REF/rtl/user_domain/ef_qspi_xip_ctrl"
-for f in DMC.v EF_QSPI_XIP_CTRL.v EF_QSPI_XIP_CTRL_AHBL.v; do
+for f in DMC.v EF_QSPI_XIP_CTRL.v EF_QSPI_XIP_CTRL_AHBL.v sst26wf080b.v; do
     cp "$CROC/rtl/user_domain/ef_qspi_xip_ctrl/$f" \
        "$REF/rtl/user_domain/ef_qspi_xip_ctrl/$f"
     echo "  rtl/user_domain/ef_qspi_xip_ctrl/$f"
@@ -199,6 +199,8 @@ echo "  rtl/test/tb_croc_soc.sv  (flash model wiring, flash_boot_mode, GPIO[8])"
 step "10/15" "Copying simulation run scripts..."
 cp "$CROC/vsim/run_vsim.sh"           "$REF/vsim/run_vsim.sh"
 echo "  vsim/run_vsim.sh        (--flash-boot mode)"
+cp "$CROC/vsim/compile_rtl.tcl"       "$REF/vsim/compile_rtl.tcl"
+echo "  vsim/compile_rtl.tcl    (user_domain RTL + sst26wf080b/spiflash sim models)"
 cp "$CROC/verilator/run_verilator.sh" "$REF/verilator/run_verilator.sh"
 echo "  verilator/run_verilator.sh  (--flash-boot mode)"
 
@@ -496,8 +498,8 @@ sim:
 	@echo "=== [1/5] Building software ==="
 	cd $(SW_DIR) && make all
 	@echo ""
-	@echo "=== [2/5] Core configuration — print_config (also compiles verilator model) ==="
-	cd $(VL_DIR) && ./run_verilator.sh --build --run ../$(SW_DIR)/bin/test/print_config.hex
+	@echo "=== [2/5] Core configuration — print_config + XiP flash sanity check ==="
+	cd $(VL_DIR) && ./run_verilator.sh --build --run ../$(SW_DIR)/bin/test/print_config.hex --flash-test
 	@echo ""
 	@echo "=== [3/5] Running all tests (including helloworld) ==="
 	@pass=0; fail=0; \

@@ -5,7 +5,8 @@
 // XiP (Execute in Place) smoke test.
 //
 // The flash payload (spi_xip_payload.hex) places a two-argument add function
-// at SPI_XIP_BASE_ADDR (flash byte 0x002000):
+// at SPI_XIP_BASE_ADDR (flash byte 0x000000 — the XiP controller subtracts
+// the XiP base before issuing the flash address):
 //
 //   int xip_add(int a, int b) { return a + b; }
 //

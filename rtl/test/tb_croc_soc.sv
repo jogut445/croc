@@ -156,10 +156,12 @@ module tb_croc_soc #(
 
   // Flash memory initialisation.
   // If +flash=<file.hex> is given, load the whole image from that file.
-  // Otherwise write a recognisable test pattern at flash byte 0x002000
-  // (maps to OBI address SpiXipFlashBase = UserBaseAddr + 0x2000).
+  // Otherwise write a recognisable test pattern at flash byte 0x000000
+  // (the XiP controller subtracts the XiP base before issuing the flash
+  // address, so OBI address SpiXipFlashBase = UserBaseAddr + 0x2000
+  // maps to flash byte 0x000000).
   localparam bit [31:0] FlashTestWord = 32'h4433_2211;
-  localparam bit [23:0] FlashTestAddr = 24'h002000;
+  localparam bit [23:0] FlashTestAddr = 24'h000000;
 
   initial begin
     #2;

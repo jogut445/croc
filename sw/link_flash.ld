@@ -8,12 +8,13 @@
  * Memory map
  * ----------
  *   FLASH  VMA  0x2000_2000  where the CPU fetches/executes (via XiP controller)
- *   FLASHLD LMA  0x0000_2000  flash array byte address (@addr used by $readmemh)
+ *   FLASHLD LMA  0x0000_0000  flash array byte address (@addr used by $readmemh)
  *   SRAM        0x1000_0000  8 KB on-chip SRAM — data, BSS, stack
  *
- * The XiP controller maps OBI address 0x2000_2000 → flash byte 0x002000,
- * so LMA = VMA - 0x2000_0000.  objcopy -O verilog emits LMA addresses,
- * giving the correct @002000 base in the hex output.
+ * The XiP controller subtracts the XiP base (UserBaseAddr + 0x2000) before
+ * issuing the flash address, so OBI address 0x2000_2000 → flash byte 0x000000.
+ * LMA = VMA - 0x2000_2000.  objcopy -O verilog emits LMA addresses,
+ * giving the correct @000000 base in the hex output.
  *
  * At startup (crt0_flash.S):
  *   1. sp  ← __stack_pointer$ (top of SRAM)

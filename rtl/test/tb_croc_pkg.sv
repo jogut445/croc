@@ -52,8 +52,9 @@ package tb_croc_pkg;
   localparam bit [31:0] SpiCfgIo2Pin = SpiCfgBase + 32'h10;
   localparam bit [31:0] SpiCfgIo3Pin = SpiCfgBase + 32'h14;
 
-  // OBI addr 0x2000_2000 → HADDR[23:0]=0x002000 → flash byte 0x002000
-  // Test pattern is loaded at flash byte 0x002000 (FlashTestAddr in testbench).
+  // OBI addr 0x2000_2000 → flash byte 0x000000 (the XiP controller subtracts
+  // the XiP base address before issuing the flash read, so the start of flash
+  // maps to SpiXipFlashBase).  Test pattern is at flash byte 0x000000.
   localparam bit [31:0] SpiXipFlashBase = croc_pkg::UserBaseAddr + 32'h0000_2000;
 
   // GPIO pin assignments for the SPI flash model (match spi_qspi_obi_wrap reset defaults)
