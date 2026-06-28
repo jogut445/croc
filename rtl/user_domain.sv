@@ -42,34 +42,6 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   ////////////////////////////
 
   // ----------------------------------------------------------------------------------------------
-  // OBI register cut at the user domain input
-  // ----------------------------------------------------------------------------------------------
-  // Breaks the combinatorial path: core instr-decode → data-addr → addr_decode →
-  // obi_demux.gnt → CVE2 LSU/IF-stage register.
-  // After the cut, gnt to the core is determined solely by whether the spill
-  // register has room — no downstream addr_decode logic in the timing path.
-  // BypassRsp=1: only the A-channel (req/gnt) is registered; the R-channel
-  // (rvalid/rdata) passes through directly to avoid an extra response cycle.
-  sbr_obi_req_t user_cut_obi_req;
-  sbr_obi_rsp_t user_cut_obi_rsp;
-
-  obi_cut #(
-    .ObiCfg      ( SbrObiCfg        ),
-    .obi_a_chan_t ( sbr_obi_a_chan_t ),
-    .obi_r_chan_t ( sbr_obi_r_chan_t ),
-    .obi_req_t    ( sbr_obi_req_t   ),
-    .obi_rsp_t    ( sbr_obi_rsp_t   ),
-    .BypassRsp    ( 1'b1            )
-  ) i_obi_cut (
-    .clk_i,
-    .rst_ni,
-    .sbr_port_req_i ( user_sbr_obi_req_i ),
-    .sbr_port_rsp_o ( user_sbr_obi_rsp_o ),
-    .mgr_port_req_o ( user_cut_obi_req   ),
-    .mgr_port_rsp_i ( user_cut_obi_rsp   )
-  );
-
-  // ----------------------------------------------------------------------------------------------
   // User Subordinate Buses
   // ----------------------------------------------------------------------------------------------
 
@@ -111,7 +83,7 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
     .rule_t    ( addr_map_rule_t                ),
     .Napot     ( 1'b0                           )
   ) i_addr_decode_periphs (
-    .addr_i           ( user_cut_obi_req.a.addr ),
+    .addr_i           ( user_sbr_obi_req_i.a.addr ),
     .addr_map_i       ( UserAddrMap             ),
     .idx_o            ( user_idx                ),
     .dec_valid_o      (),
@@ -130,9 +102,9 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
     .clk_i,
     .rst_ni,
 
-    .sbr_port_select_i ( user_idx           ),
-    .sbr_port_req_i    ( user_cut_obi_req   ),
-    .sbr_port_rsp_o    ( user_cut_obi_rsp   ),
+    .sbr_port_select_i ( user_idx             ),
+    .sbr_port_req_i    ( user_sbr_obi_req_i  ),
+    .sbr_port_rsp_o    ( user_sbr_obi_rsp_o  ),
 
     .mgr_ports_req_o   ( all_user_sbr_obi_req ),
     .mgr_ports_rsp_i   ( all_user_sbr_obi_rsp )
@@ -155,6 +127,25 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
     .obi_rsp_o ( user_rom_obi_rsp )
   );
 
+  sbr_obi_req_t spi_cut_obi_req;
+  sbr_obi_rsp_t spi_cut_obi_rsp;
+
+  obi_cut #(
+    .ObiCfg      ( SbrObiCfg        ),
+    .obi_a_chan_t ( sbr_obi_a_chan_t ),
+    .obi_r_chan_t ( sbr_obi_r_chan_t ),
+    .obi_req_t    ( sbr_obi_req_t   ),
+    .obi_rsp_t    ( sbr_obi_rsp_t   ),
+    .BypassRsp    ( 1'b0            )
+  ) i_spi_obi_cut (
+    .clk_i,
+    .rst_ni,
+    .sbr_port_req_i ( user_design_obi_req ),
+    .sbr_port_rsp_o ( user_design_obi_rsp ),
+    .mgr_port_req_o ( spi_cut_obi_req     ),
+    .mgr_port_rsp_i ( spi_cut_obi_rsp     )
+  );
+
   spi_qspi_obi_wrap #(
     .GpioCount    ( GpioCount ),
     .NUM_LINES    ( 16        ),
@@ -171,8 +162,8 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   ) i_spi_qspi (
     .clk_i,
     .rst_ni,
-    .obi_req_i      ( user_design_obi_req ),
-    .obi_rsp_o      ( user_design_obi_rsp ),
+    .obi_req_i      ( spi_cut_obi_req ),
+    .obi_rsp_o      ( spi_cut_obi_rsp ),
     .gpio_in_sync_i ( gpio_in_sync_i      ),
     .gpio_out_o     ( gpio_out_o          ),
     .gpio_oen_o     ( gpio_oen_o          )

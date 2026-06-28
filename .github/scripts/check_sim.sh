@@ -13,7 +13,7 @@ expected_lines=(
   "\[JTAG\] Resumed hart 0"
   "\[UART\] Hello World from Croc v2!"
   "\[UART\]   iDMAEnable: 0"
-  "\[UART\]   Core: CVE2, RV32BCIMU"
+  "\[UART\]   Core: CVE2, RV32CIMU"
   "\[UART\]   PMPEnable: 0"
   "\[UART\]   SRAM: 2h banks x 400h words"
   "\[UART\]   Debug\s*: present"
