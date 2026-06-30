@@ -447,10 +447,14 @@ fi
 echo "  constraints.sdc: false-path crash_dump_o dead logic (unconnected port)"
 
 PLACEMENT="$REF/openroad/scripts/02_placement.tcl"
-patch_file "$PLACEMENT" \
-    "global_placement -density 0.60 \\" \
-    "global_placement -density 0.50 \\"
-echo "  02_placement.tcl: global_placement density 0.60 -> 0.50 (second/actual pass)"
+if grep -qF "global_placement -density 0.50 \\" "$PLACEMENT"; then
+    echo "  02_placement.tcl: density already 0.50 (no change)"
+elif grep -qF "global_placement -density 0.60 \\" "$PLACEMENT"; then
+    sed -i 's/global_placement -density 0\.60 \\/global_placement -density 0.50 \\/' "$PLACEMENT"
+    echo "  02_placement.tcl: global_placement density 0.60 -> 0.50 (second/actual pass)"
+else
+    echo "  WARNING: could not find second global_placement -density line in 02_placement.tcl"
+fi
 
 # ----------------------------------------------------------------
 # 14. .cockpitrc — select 512x64 macro so icdesign generates the right
