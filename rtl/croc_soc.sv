@@ -56,8 +56,10 @@ logic [GpioCount-1:0] croc_gpio_oen_o;
 logic [GpioCount-1:0] user_gpio_out;
 logic [GpioCount-1:0] user_gpio_oen;
 
-// User domain SPI GPIO outputs are OR'd with the core GPIO peripheral.
-// Software must not configure the same pin in both simultaneously.
+// When SpiEn register in the SPI wrapper is enabled (flash boot), user_gpio_out
+// carries SPI signals that are OR'd with the core GPIO peripheral.  When SpiEn
+// is disabled (JTAG boot), user_gpio_out is all-zero so the OR is a no-op and
+// the GPIO peripheral has exclusive control of every pad.
 assign gpio_o       = croc_gpio_o   | user_gpio_out;
 assign gpio_out_en_o = croc_gpio_oen_o | user_gpio_oen;
 
@@ -105,6 +107,7 @@ user_domain #(
   .rst_ni ( synced_rst_n ),
   .ref_clk_i,
   .testmode_i,
+  .boot_sel_i     ( gpio_i[8]       ),
 
   .user_sbr_obi_req_i ( user_sbr_obi_req ),
   .user_sbr_obi_rsp_o ( user_sbr_obi_rsp ),

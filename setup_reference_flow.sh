@@ -204,6 +204,27 @@ echo "  vsim/compile_rtl.tcl    (user_domain RTL + sst26wf080b/spiflash sim mode
 cp "$CROC/verilator/run_verilator.sh" "$REF/verilator/run_verilator.sh"
 echo "  verilator/run_verilator.sh  (--flash-boot mode)"
 
+# Patch openroad/run_backend.sh: unset QT_QPA_PLATFORM before openroad -gui so
+# the GUI can open even when QT_QPA_PLATFORM=offscreen is set in the environment.
+BACKEND_SH="$REF/openroad/run_backend.sh"
+if ! grep -qF "unset QT_QPA_PLATFORM" "$BACKEND_SH" 2>/dev/null; then
+    sed -i 's|    run_cmd "openroad -gui \$1 \\|    unset QT_QPA_PLATFORM\n    run_cmd "openroad -gui $1 \\|' "$BACKEND_SH"
+    echo "  openroad/run_backend.sh  patched: unset QT_QPA_PLATFORM before GUI launch"
+else
+    echo "  openroad/run_backend.sh  already has unset QT_QPA_PLATFORM"
+fi
+
+# Patch env.sh: on the ETH machine the bondpad LEF/GDS live under PDK_ROOT
+# (flat layout), not under CROC_ROOT/ihp13/bondpad/.
+ENV_SH="$REF/env.sh"
+if grep -qF 'PDK_DIR_LEF_BOND="$CROC_ROOT/ihp13/bondpad/lef"' "$ENV_SH" 2>/dev/null; then
+    sed -i 's|PDK_DIR_LEF_BOND="\$CROC_ROOT/ihp13/bondpad/lef"|PDK_DIR_LEF_BOND="$PDK_ROOT/lef"|g' "$ENV_SH"
+    sed -i 's|PDK_DIR_GDS_BOND="\$CROC_ROOT/ihp13/bondpad/gds"|PDK_DIR_GDS_BOND="$PDK_ROOT/gds"|g' "$ENV_SH"
+    echo "  env.sh               patched: bondpad paths -> \$PDK_ROOT/lef and \$PDK_ROOT/gds"
+else
+    echo "  env.sh               bondpad paths already use \$PDK_ROOT (no change)"
+fi
+
 # ----------------------------------------------------------------
 # 11. Filelists — yosys (synthesis) and verilator (simulation)
 #
@@ -277,6 +298,18 @@ FLOORPLAN="$REF/openroad/scripts/01_floorplan.tcl"
 
 patch_file "$FLOORPLAN" "set chipW    1916" "set chipW    2416"
 echo "  floorplan: chipW 1916 -> 2416"
+
+patch_file "$FLOORPLAN" "set floorPaddingX      12.0" "set floorPaddingX      20.0"
+patch_file "$FLOORPLAN" "set floorPaddingY      12.0" "set floorPaddingY      20.0"
+echo "  floorplan: floorPaddingX/Y 12.0 -> 20.0 (more margin for macro placement)"
+
+# Add sramHaloX/Y variables and wire them into cut_rows (replaces hardcoded 1).
+if ! grep -qF "sramHaloX" "$FLOORPLAN"; then
+    sed -i 's|set floor_midpointY.*|&\nset sramHaloX          10.0\nset sramHaloY          10.0|' "$FLOORPLAN"
+fi
+patch_file "$FLOORPLAN" "cut_rows -halo_width_x 1 -halo_width_y 1" \
+                         "cut_rows -halo_width_x \$sramHaloX -halo_width_y \$sramHaloY"
+echo "  floorplan: sramHaloX/Y 1 -> 10.0 (larger macro row-cut halo)"
 
 sed -i 's/512x32/512x64/g' "$FLOORPLAN"
 echo "  floorplan: SRAM macro 512x32 -> 512x64"
@@ -412,6 +445,12 @@ if ! grep -qF "crash_dump_o" "$SDC"; then
     }1' "$SDC" > "$SDC.tmp" && mv "$SDC.tmp" "$SDC"
 fi
 echo "  constraints.sdc: false-path crash_dump_o dead logic (unconnected port)"
+
+PLACEMENT="$REF/openroad/scripts/02_placement.tcl"
+patch_file "$PLACEMENT" \
+    "global_placement -density 0.60 \\" \
+    "global_placement -density 0.50 \\"
+echo "  02_placement.tcl: global_placement density 0.60 -> 0.50 (second/actual pass)"
 
 # ----------------------------------------------------------------
 # 14. .cockpitrc — select 512x64 macro so icdesign generates the right

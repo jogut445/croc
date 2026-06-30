@@ -44,6 +44,9 @@ module tb_croc_soc #(
   bit    run_flash_test;
   bit    explicit_binary;  // set when +binary= is given on the command line
   bit    flash_boot_mode;  // flash given + no explicit binary → autonomous flash boot
+  // has_flash: true when the SPI flash model needs to be active (SIO routing enabled).
+  // False → gpio_in passes straight from VIP with no flash interference (default TB behaviour).
+  bit    has_flash;
 
   initial begin
     if ($value$plusargs("binary=%s", binary_path)) begin
@@ -59,6 +62,12 @@ module tb_croc_soc #(
     if (!$value$plusargs("flash=%s", flash_hex_path))
       flash_hex_path = "";
 
+    // has_flash: enable flash model routing when a hex image is supplied OR when
+    // the +flash_test plusarg is given (test pattern is written directly into flash).
+    // When neither is present the testbench behaves like the default simple TB:
+    // gpio_in is driven entirely by the VIP and all GPIO pins are freely usable.
+    has_flash = (flash_hex_path != "") || run_flash_test;
+
     // Autonomous flash-boot mode: flash image given but no SRAM binary.
     // GPIO[BootSelPin] is driven high from t=0 so boot_mode_q captures 1
     // at reset deassertion; the bootrom then jumps directly to 0x2000_2000.
@@ -66,6 +75,8 @@ module tb_croc_soc #(
     if (flash_boot_mode)
       $display("Flash boot mode: GPIO[%0d] asserted, JTAG binary load skipped.",
                BootSelPin);
+    if (!has_flash)
+      $display("No flash image/test: using default TB (VIP drives all GPIO pins).");
   end
 
   ////////////
@@ -123,13 +134,18 @@ module tb_croc_soc #(
     .io3 ( gpio_out[SpiPinIo3] )
   );
 
+  // When has_flash=0 (no flash image/test), pass gpio_in_vip straight through so
+  // all GPIO pins are fully controlled by the VIP — default testbench behaviour.
+  // When has_flash=1, overlay the flash SIO lines and BootSelPin on top of VIP.
   always_comb begin
     gpio_in = gpio_in_vip;
-    gpio_in[SpiPinIo0]  = i_flash.io0_oe ? i_flash.io0_dout : 1'b0;
-    gpio_in[SpiPinIo1]  = i_flash.io1_oe ? i_flash.io1_dout : 1'b0;
-    gpio_in[SpiPinIo2]  = i_flash.io2_oe ? i_flash.io2_dout : 1'b0;
-    gpio_in[SpiPinIo3]  = i_flash.io3_oe ? i_flash.io3_dout : 1'b0;
-    gpio_in[BootSelPin] = flash_boot_mode; // asserted from t=0 for autonomous flash boot
+    if (has_flash) begin
+      gpio_in[SpiPinIo0]  = i_flash.io0_oe ? i_flash.io0_dout : gpio_in_vip[SpiPinIo0];
+      gpio_in[SpiPinIo1]  = i_flash.io1_oe ? i_flash.io1_dout : gpio_in_vip[SpiPinIo1];
+      gpio_in[SpiPinIo2]  = i_flash.io2_oe ? i_flash.io2_dout : gpio_in_vip[SpiPinIo2];
+      gpio_in[SpiPinIo3]  = i_flash.io3_oe ? i_flash.io3_dout : gpio_in_vip[SpiPinIo3];
+      gpio_in[BootSelPin] = flash_boot_mode;
+    end
   end
 `else
   wire [3:0] flash_sio;
@@ -144,13 +160,18 @@ module tb_croc_soc #(
     .CEb ( flash_csn  )
   );
 
+  // When has_flash=0, pass gpio_in_vip straight through — default testbench behaviour.
+  // When has_flash=1, overlay flash SIO and BootSelPin; fall back to VIP when flash
+  // is not driving (tristate) so the VIP retains control of inactive SPI pins.
   always_comb begin
     gpio_in = gpio_in_vip;
-    gpio_in[SpiPinIo0]  = (flash_sio[0] === 1'bz) ? 1'b0 : flash_sio[0];
-    gpio_in[SpiPinIo1]  = (flash_sio[1] === 1'bz) ? 1'b0 : flash_sio[1];
-    gpio_in[SpiPinIo2]  = (flash_sio[2] === 1'bz) ? 1'b0 : flash_sio[2];
-    gpio_in[SpiPinIo3]  = (flash_sio[3] === 1'bz) ? 1'b0 : flash_sio[3];
-    gpio_in[BootSelPin] = flash_boot_mode; // asserted from t=0 for autonomous flash boot
+    if (has_flash) begin
+      gpio_in[SpiPinIo0]  = (flash_sio[0] === 1'bz) ? gpio_in_vip[SpiPinIo0] : flash_sio[0];
+      gpio_in[SpiPinIo1]  = (flash_sio[1] === 1'bz) ? gpio_in_vip[SpiPinIo1] : flash_sio[1];
+      gpio_in[SpiPinIo2]  = (flash_sio[2] === 1'bz) ? gpio_in_vip[SpiPinIo2] : flash_sio[2];
+      gpio_in[SpiPinIo3]  = (flash_sio[3] === 1'bz) ? gpio_in_vip[SpiPinIo3] : flash_sio[3];
+      gpio_in[BootSelPin] = flash_boot_mode;
+    end
   end
 `endif
 
@@ -165,26 +186,28 @@ module tb_croc_soc #(
 
   initial begin
     #2;
-    if (flash_hex_path != "") begin
-      $display("@%t | [FLASH] Loading %s into flash memory", $time, flash_hex_path);
+    if (has_flash) begin
+      if (flash_hex_path != "") begin
+        $display("@%t | [FLASH] Loading %s into flash memory", $time, flash_hex_path);
 `ifdef VERILATOR
-      $readmemh(flash_hex_path, i_flash.memory);
+        $readmemh(flash_hex_path, i_flash.memory);
 `else
-      $readmemh(flash_hex_path, i_flash.I0.memory);
+        $readmemh(flash_hex_path, i_flash.I0.memory);
 `endif
-    end else begin
-      $display("@%t | [FLASH] Writing test pattern at flash byte 0x%06h", $time, FlashTestAddr);
+      end else begin
+        $display("@%t | [FLASH] Writing test pattern at flash byte 0x%06h", $time, FlashTestAddr);
 `ifdef VERILATOR
-      i_flash.memory[FlashTestAddr + 0] = 8'h11;
-      i_flash.memory[FlashTestAddr + 1] = 8'h22;
-      i_flash.memory[FlashTestAddr + 2] = 8'h33;
-      i_flash.memory[FlashTestAddr + 3] = 8'h44;
+        i_flash.memory[FlashTestAddr + 0] = 8'h11;
+        i_flash.memory[FlashTestAddr + 1] = 8'h22;
+        i_flash.memory[FlashTestAddr + 2] = 8'h33;
+        i_flash.memory[FlashTestAddr + 3] = 8'h44;
 `else
-      i_flash.I0.memory[FlashTestAddr + 0] = 8'h11;
-      i_flash.I0.memory[FlashTestAddr + 1] = 8'h22;
-      i_flash.I0.memory[FlashTestAddr + 2] = 8'h33;
-      i_flash.I0.memory[FlashTestAddr + 3] = 8'h44;
+        i_flash.I0.memory[FlashTestAddr + 0] = 8'h11;
+        i_flash.I0.memory[FlashTestAddr + 1] = 8'h22;
+        i_flash.I0.memory[FlashTestAddr + 2] = 8'h33;
+        i_flash.I0.memory[FlashTestAddr + 3] = 8'h44;
 `endif
+      end
     end
   end
 
@@ -226,6 +249,11 @@ module tb_croc_soc #(
   // sequence (~1000 clock cycles) followed by a cache-line fetch (~156 cycles).
   task automatic spi_xip_test;
     automatic logic [31:0] rd_data;
+
+    // SpiEn resets to 0 in JTAG boot mode; enable the SPI controller before
+    // any XiP access so the SPI signals reach the flash model via the GPIO pins.
+    $display("@%t | [SPI] Enabling SPI controller (SpiEn = 1)", $time);
+    i_vip.jtag_write_reg32(SpiCfgSpiEn, 32'h1);
 
     $display("@%t | [SPI] Reading first XiP word (triggers flash reset + cache fill)...", $time);
     begin : xip_read

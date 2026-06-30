@@ -129,14 +129,16 @@ source src/instances.tcl
 
 # Placing macros
 # use these for macro placement
-set floorPaddingX      12.0
-set floorPaddingY      12.0
+set floorPaddingX      20.0
+set floorPaddingY      20.0
 set floor_leftX       [expr $core_leftX + $floorPaddingX]
 set floor_bottomY     [expr $core_bottomY + $floorPaddingY]
 set floor_rightX      [expr $core_rightX - $floorPaddingX]
 set floor_topY        [expr $core_topY - $floorPaddingY]
 set floor_midpointX   [expr $floor_leftX + ($floor_rightX - $floor_leftX)/2]
 set floor_midpointY   [expr $floor_bottomY + ($floor_topY - $floor_bottomY)/2]
+set sramHaloX          10.0
+set sramHaloY          10.0
 
 utl::report "Place Macros"
 
@@ -155,7 +157,7 @@ placeInstance $bank1_sram0 $sramBank1X $sramTopY R0
 # defined in init_tech.tcl
 insertTapCells
 
-cut_rows -halo_width_x 1 -halo_width_y 1
+cut_rows -halo_width_x $sramHaloX -halo_width_y $sramHaloY
 global_connect
 
 

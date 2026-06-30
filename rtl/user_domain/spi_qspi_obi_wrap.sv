@@ -17,9 +17,12 @@
 //   0x0C  Io1Pin  — IO[1] GPIO pin index  (reset = Io1Pin parameter)
 //   0x10  Io2Pin  — IO[2] GPIO pin index  (reset = Io2Pin parameter)
 //   0x14  Io3Pin  — IO[3] GPIO pin index  (reset = Io3Pin parameter)
+//   0x18  SpiEn   — SPI flash controller enable, 1 = enabled  (reset = boot_sel_i)
 //
 // The parameter values serve as hardware reset defaults so the controller
 // works out-of-reset without any software configuration.
+// SpiEn resets to boot_sel_i: enabled when booting from flash, disabled otherwise
+// (e.g. JTAG boot), freeing all SPI-assigned GPIOs for normal use.
 
 module spi_qspi_obi_wrap
   import croc_pkg::*;
@@ -39,6 +42,8 @@ module spi_qspi_obi_wrap
 ) (
   input  logic clk_i,
   input  logic rst_ni,
+  // Boot mode strap: SpiEn register resets to this value (1 = flash boot, 0 = JTAG boot)
+  input  logic boot_sel_i,
 
   // OBI subordinate port
   input  sbr_obi_req_t obi_req_i,
@@ -55,10 +60,11 @@ module spi_qspi_obi_wrap
   localparam int unsigned PinW = $clog2(GpioCount);
 
   // -------------------------------------------------------------------------
-  // Config registers (software-writable pin assignments)
+  // Config registers (software-writable pin assignments + SPI enable)
   // -------------------------------------------------------------------------
   logic [PinW-1:0] sck_pin_q, csn_pin_q;
   logic [PinW-1:0] io0_pin_q, io1_pin_q, io2_pin_q, io3_pin_q;
+  logic            spi_en_q;  // 0x18: 1 = SPI controller drives GPIOs, 0 = GPIOs pass through freely
 
   // -------------------------------------------------------------------------
   // Raw SPI signals
@@ -131,6 +137,7 @@ module spi_qspi_obi_wrap
       3'd3:    cfg_rdata = 32'(io1_pin_q);
       3'd4:    cfg_rdata = 32'(io2_pin_q);
       3'd5:    cfg_rdata = 32'(io3_pin_q);
+      3'd6:    cfg_rdata = 32'(spi_en_q);
       default: cfg_rdata = '0;
     endcase
   end
@@ -231,6 +238,7 @@ module spi_qspi_obi_wrap
       io1_pin_q <= PinW'(Io1Pin);
       io2_pin_q <= PinW'(Io2Pin);
       io3_pin_q <= PinW'(Io3Pin);
+      spi_en_q  <= boot_sel_i;
     end else if (state_q == CFG_RESP && cfg_wr_q) begin
       case (cfg_reg_q)
         3'd0: sck_pin_q <= PinW'(cfg_wdata_q);
@@ -239,6 +247,7 @@ module spi_qspi_obi_wrap
         3'd3: io1_pin_q <= PinW'(cfg_wdata_q);
         3'd4: io2_pin_q <= PinW'(cfg_wdata_q);
         3'd5: io3_pin_q <= PinW'(cfg_wdata_q);
+        3'd6: spi_en_q  <= cfg_wdata_q[0];
         default: ;
       endcase
     end
@@ -246,17 +255,23 @@ module spi_qspi_obi_wrap
 
   // -------------------------------------------------------------------------
   // GPIO: dynamic pin assignments from config registers
+  //
+  // Mux: when spi_en_q=0 (e.g. JTAG boot), this wrapper drives nothing so the
+  // GPIO peripheral has exclusive control of all pads.  When spi_en_q=1 (flash
+  // boot), the SPI signals are OR'd with the GPIO peripheral in croc_soc.
   // -------------------------------------------------------------------------
   always_comb begin
     gpio_out_o = '0;
     gpio_oen_o = '0;
-    for (int i = 0; i < GpioCount; i++) begin
-      if (i == int'(sck_pin_q)) begin gpio_out_o[i] = spi_sck;     gpio_oen_o[i] = 1'b1;          end
-      if (i == int'(csn_pin_q)) begin gpio_out_o[i] = spi_csn;     gpio_oen_o[i] = 1'b1;          end
-      if (i == int'(io0_pin_q)) begin gpio_out_o[i] = spi_dout[0]; gpio_oen_o[i] = spi_douten[0]; end
-      if (i == int'(io1_pin_q)) begin gpio_out_o[i] = spi_dout[1]; gpio_oen_o[i] = spi_douten[1]; end
-      if (i == int'(io2_pin_q)) begin gpio_out_o[i] = spi_dout[2]; gpio_oen_o[i] = spi_douten[2]; end
-      if (i == int'(io3_pin_q)) begin gpio_out_o[i] = spi_dout[3]; gpio_oen_o[i] = spi_douten[3]; end
+    if (spi_en_q) begin
+      for (int i = 0; i < GpioCount; i++) begin
+        if (i == int'(sck_pin_q)) begin gpio_out_o[i] = spi_sck;     gpio_oen_o[i] = 1'b1;          end
+        if (i == int'(csn_pin_q)) begin gpio_out_o[i] = spi_csn;     gpio_oen_o[i] = 1'b1;          end
+        if (i == int'(io0_pin_q)) begin gpio_out_o[i] = spi_dout[0]; gpio_oen_o[i] = spi_douten[0]; end
+        if (i == int'(io1_pin_q)) begin gpio_out_o[i] = spi_dout[1]; gpio_oen_o[i] = spi_douten[1]; end
+        if (i == int'(io2_pin_q)) begin gpio_out_o[i] = spi_dout[2]; gpio_oen_o[i] = spi_douten[2]; end
+        if (i == int'(io3_pin_q)) begin gpio_out_o[i] = spi_dout[3]; gpio_oen_o[i] = spi_douten[3]; end
+      end
     end
   end
 

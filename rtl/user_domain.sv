@@ -13,6 +13,7 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   input  logic      ref_clk_i,
   input  logic      rst_ni,
   input  logic      testmode_i,
+  input  logic      boot_sel_i,   // boot mode strap forwarded to SPI wrapper SpiEn reset
 
   input  sbr_obi_req_t user_sbr_obi_req_i, // User Sbr (rsp_o), Croc Mgr (req_i)
   output sbr_obi_rsp_t user_sbr_obi_rsp_o,
@@ -162,8 +163,9 @@ module user_domain import user_pkg::*; import croc_pkg::*; #(
   ) i_spi_qspi (
     .clk_i,
     .rst_ni,
-    .obi_req_i      ( spi_cut_obi_req ),
-    .obi_rsp_o      ( spi_cut_obi_rsp ),
+    .boot_sel_i     ( boot_sel_i          ),
+    .obi_req_i      ( spi_cut_obi_req     ),
+    .obi_rsp_o      ( spi_cut_obi_rsp     ),
     .gpio_in_sync_i ( gpio_in_sync_i      ),
     .gpio_out_o     ( gpio_out_o          ),
     .gpio_oen_o     ( gpio_oen_o          )
