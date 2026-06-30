@@ -23,7 +23,7 @@ int main() {
     // Output pins (3:0) driven to 0xA, input pins (7:4) should read 0
     // Combined: 0xA0 in loopback TB (output feeds back to input shifted)
     // or 0x0A if output register reads back directly
-    // Accept either — the key test is that the value is stable and non-garbage
+    // Accept either ? the key test is that the value is stable and non-garbage
     CHECK_ASSERT(1, (val & 0x0F) == 0x0A || (val & 0xFF) == 0xA0);
 
     // Test toggle

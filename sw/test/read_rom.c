@@ -15,9 +15,10 @@ int main() {
     // setup the UART peripheral
     uart_init();
 
-    printf("Reading eight 32-bit words from ROM:\n");
-    for (int i = 0; i < 32; i++) {
+    printf("Reading ROM until null terminator:\n");
+    for (int i = 0; ; i++) {
         uint8_t word = *reg32(USER_ROM_BASE_ADDR, i * 4);
+        if (word == 0) break;
         printf("%c", word);
     }
     printf("\n");

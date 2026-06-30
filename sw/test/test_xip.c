@@ -32,6 +32,9 @@ static void check(int a, int b, int got) {
 int main(void) {
     uart_init();
 
+    // Enable the SPI flash controller (disabled by default in JTAG boot mode).
+    SPI_CFG_SPI_EN = 1;
+
     xip_add_t xip_add = (xip_add_t)SPI_XIP_BASE_ADDR;
 
     check(3, 4, xip_add(3, 4));

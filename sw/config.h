@@ -20,6 +20,10 @@
 #define SPI_CFG_BASE_ADDR   0x20001000 // spi_qspi_obi_wrap config registers
 #define SPI_XIP_BASE_ADDR   0x20002000 // XiP flash window
 
+// SPI wrapper control register (offset 0x18): write 1 to enable the SPI flash
+// controller when running in JTAG boot mode (reset default = 0 in JTAG boot).
+#define SPI_CFG_SPI_EN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x18))
+
 // Frequencies
 #define TB_FREQUENCY        20000000
 #define TB_BAUDRATE         115200

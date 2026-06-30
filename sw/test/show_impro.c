@@ -81,9 +81,8 @@ static void axpy_simd(void) {
     const uint32_t av  = PACK8(AXPY_ALPHA, AXPY_ALPHA, AXPY_ALPHA, AXPY_ALPHA);
     // Static arrays are 4-byte aligned; M is a multiple of 4 so every strip
     // base is aligned.  One lw replaces 4×lbu+3×slli+3×or per operand;
-    // one sw replaces 4×sb.  2× unrolled to hide load-use latency on the
-    // in-order Ibex pipeline: by the time pmul8 consumes x0, y0 is already
-    // in flight so its load-use stall overlaps with x1's load.
+    // one sw replaces 4×sb.  2× unrolled to amortize loop overhead (pointer
+    // increments, counter, branch) across two strips of useful work.
     const uint32_t *xp = (const uint32_t *)X;
     const uint32_t *yp = (const uint32_t *)Y;
     uint32_t *zp       = (uint32_t *)Z_simd;

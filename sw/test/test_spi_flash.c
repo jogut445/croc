@@ -13,9 +13,14 @@
 #define SPI_CFG_IO1_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x0C))
 #define SPI_CFG_IO2_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x10))
 #define SPI_CFG_IO3_PIN (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x14))
+// SpiEn: enable register — must be set to 1 when running in JTAG boot mode
+#define SPI_CFG_SPI_EN  (*(volatile uint32_t *)(SPI_CFG_BASE_ADDR + 0x18))
 
 int main(void) {
     uart_init();
+
+    // Enable the SPI flash controller (disabled by default in JTAG boot mode).
+    SPI_CFG_SPI_EN = 1;
 
     // First read triggers the flash software-reset sequence (~1000 cycles)
     // then fills a cache line; subsequent reads in the same line hit the cache.
